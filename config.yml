@@ -1,0 +1,96 @@
+### ------------------------------------------- ###
+###                                             ###
+###              CONFIGURATION FILE             ###     
+###                                             ###
+### ------------------------------------------- ###
+
+# The main.py script reads this file to extract the parameters
+# inputed by the final user to excute the characteristics extraction
+# algorithm
+
+# 1. Folders and common parameters
+# The geojson contains geolocalized polygons of arrays. Currently, the supported coordinates system are 
+# ESPG:4623 (i.e. WGS84 or GPS coordinate system)
+
+data_dir: "data" # The name of the folder where the source data is located
+source-data: 'input.geojson' # The name of the source data. It corresponds to the .geojson file with all the polygons to proceed. 
+output-name: "charateristics" # The name of the output file
+
+# 2. Parameterization
+# These parameters specify whether the users has either a database with PV panels characteristics
+# or if he has DEM rasters. 
+has-data: True
+has-dem: False
+
+# 2.1. Table formatting
+# If the user has a table, he should specify the name of some columns
+# as the table is reformatted later in the script.
+data-directory: "data" # The location of the auxiliary data file with the PV panels characteristics
+data-name: "filtered_characteristics.csv" # The name of the table with the minimal information
+
+# Name of the columns. 
+# Edit the name of the columns as they are named in the data_name file. 
+latitude_var: "latitude"
+longitude_var: "longitude"
+ic_var: "kWp"
+surface_var: "surface"
+tilt_var: 'tilt' 
+
+# 2.2. DEM preparation
+# If the user has DEM rasters, the path to the rasters should be specified
+# The indicated folder should contain all necessary rasters
+# The supported format is geotiff.
+# the conversion specifies the in proj and out proj
+# epsg codes are expected and should be separated by a comma (,) and no spaces
+# after the comma
+# otherwise it is a None
+
+raster-folder: 'hands-on'
+conversion: "epsg:4326,epsg:2154"
+
+# 2. Methods
+# The following parameters define the methods chosen to infer the characteristics
+
+### SURFACE COMPUTATION ###
+# No parameter necessary.
+
+### TILT ESTIMATION ###
+# Methods : {theil-sen, lut, constant}
+tilt-method: "theil-sen"
+
+### AZIMUTH ESTIMATION ###
+# Methods : {theil-sen, bounding-box}
+azimuth-method: "theil-sen"
+
+# Parameters for the Theil-Sen (TS) regression
+# These parameters are common for the tilt and azimuth computation
+M: None  # Number of iterations for the TS regressor
+N: None  # Number of points for the samples for the TS regressor
+seed: 42 # Random seed for the TS regressor
+offset: 25 # offset with respect to the polygon boundaries for the computation of the masks and DSM
+
+# Parameters for the look-up-table
+# The number of slices (in both latitude and longitude) desired 
+# for the computation of the LUT. 
+# Given a surface slice, the LUT will be an array of shape (lut-steps, lut-steps)
+lut-steps: 25
+
+# Parameters for the constant tilt imputation
+# Should be passed in degrees
+constant-tilt : 30
+        
+### INSTALLED CAPACITY ESTIMATION ###
+# Regression type : {clustered, linear, constant}
+# The regression type can be either clustered, linear or constant.
+regression-type: "clustered"
+
+# Regression clusters:
+# If the user choses a clustered linear regression (`clustered`), then
+# he also needs to specify the number of clusters
+regression-clusters: 4
+
+# Default coefficient:
+# If the user choses a constant computation of the installed capacity, 
+# then the coefficient should be passed as input. 
+# this is expressed in [kWp / m2]
+default-coefficient: 0.167
