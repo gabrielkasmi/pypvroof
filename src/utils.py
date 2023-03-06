@@ -492,6 +492,12 @@ def create_LUT(df, surfaces_categories, latitudes_categories, longitude_categori
 def check_phi(phi):
     phi = np.where(phi>=135, phi - 2*(phi-90), phi)
     phi = np.where(phi<=-135, phi + 2*(-phi-90), phi)
+
+    # rescale the azimuth angle 
+    # to express it relative to the north
+
+    phi -= 180
+
     return phi
 
 
