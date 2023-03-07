@@ -489,14 +489,34 @@ def create_LUT(df, surfaces_categories, latitudes_categories, longitude_categori
 
     return LUT
 
-def check_phi(phi):
-    phi = np.where(phi>=135, phi - 2*(phi-90), phi)
-    phi = np.where(phi<=-135, phi + 2*(-phi-90), phi)
+def check_phi(phi, offset = 45):
+    """
+    rescale phi to make it point northwards
+    and rotating eastwards:
 
-    # rescale the azimuth angle 
-    # to express it relative to the north
+    before : 
+    0 : south 
+    -90 : west
+    90 : east
+    (-)180 : north
 
-    phi -= 180
+    after:
+    0 : north
+    -90 : west
+    90 : east
+    (-)180 : south
+
+    also applies an offset that reprojects the angle 
+    to the lower half of the circle 
+    """
+
+    print(phi)
+    # rescale
+    if phi > 0:
+        phi  = -phi + 180
+
+    else:
+        phi = np.abs(phi) - 180
 
     return phi
 
@@ -554,8 +574,8 @@ def azimuth_bounding_box(polygon):
     returns the angle relative to south :
 
     0 = south
-    -90 = east
-    90 = west
+    -90 = west
+    90 = east
     180 = north
 
     applies a heuristic that "reprojects" panels facing north (i.e. if the azimuth 
