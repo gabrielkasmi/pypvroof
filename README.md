@@ -87,8 +87,11 @@ We recommend you follow the steps of our [hands-on notebook](https://github.com/
 If you wish to use this work, please cite us as: 
 
 ```
-@article{
-
+@article{tremenbert2023pypvroof,
+  title={PyPVRoof: a Python package for extracting the characteristics of rooftop PV installations using remote sensing data},
+  author={Tr{\'e}menbert, Yann and Kasmi, Gabriel and Dubus, Laurent and Saint-Drenan, Yves-Marie and Blanc, Philippe},
+  journal={arXiv preprint arXiv:2309.07143},
+  year={2023}
 }
 ```
 
