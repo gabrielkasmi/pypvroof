@@ -13,7 +13,7 @@ pip install pypvroof
 Or install from source:
 
 ```bash
-git clone https://github.com/yourusername/pypvroof.git
+git clone https://github.com/gabrielkasmi/pypvroof.git
 cd pypvroof
 pip install -e .
 ```
@@ -27,6 +27,8 @@ pip install -e .
 
 ## Quick Start
 
+The supplementary data is accessible on our Zenodo repository: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7586879.svg)](https://doi.org/10.5281/zenodo.7586879)
+
 ```python
 import geojson
 from pypvroof.main import MetadataExtraction
@@ -34,20 +36,19 @@ from pypvroof.main import MetadataExtraction
 
 # load the data 
 index =1356
-arrays=geojson.load(open("input/arrays_69.geojson"))
+arrays=geojson.load(open("path/to/geojson/with/arrays"))
 case=arrays['features'][index]
 
 
 # Example parameters dictionary
+# choose your own methods
 params = {
-    "azimuth-method": "bounding-box",
-    "tilt-method": "lut",
-#    "raster-folder":"input"
-    "regression-type": "linear",
-#    "has-data": False,
-#    "has-dem": False,
-#    "constant-tilt": 30,
-#    "default-coefficient": 1/(6.5)
+    "azimuth-method": "bounding-box", # choose between bounding-box and theil-sen
+    "tilt-method": "lut", # choose between constant, lut and theil-sen
+#    "raster-folder":"input" # specify the location of the raster as a .tif file if using theil-sen
+    "regression-type": "linear", # choose between constant, linear or clustered
+#    "constant-tilt": 30, # default parameters if no lookup table of DEM
+#    "default-coefficient": 1/(6.5) # default parameter if no data to calibrate the linear regression coefficients
 }
 
 # initialize the object for extracting the metadata
@@ -86,9 +87,11 @@ pypvroof/
 
 - Extract PV roof characteristics from GeoJSON polygons
 - Support for multiple computation methods
-- Default LUT-France included
 - Custom lookup table support
 - Flexible parameter configuration
+
+
+The package is shipped with the lookup table for France used in [3] and array metadata from BDPV database and with a dataset of PV systems characteristics coming from BDPV if you want to use the linear regression for deriving the installed capacity of the system. 
 
 ## License
 
@@ -96,10 +99,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Overview and motivation
 
-The supplementary data is accessible on our Zenodo repository: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7586879.svg)](https://doi.org/10.5281/zenodo.7586879)
-
-
-This repository provides an all-in-one approach for extracting metadata of rooftop PV installations. The approach is modular, depending on the data available, we use different methods to extract these characteristics. The user only has to set his preferred parameters depending on the data available and the module will automatically proceed a single polygon or a complete `.geojson` file. We extract the following characteristics:
+PyPVRoof is an all-in-one approach for extracting metadata of rooftop PV installations. The approach is modular, depending on the data available, we use different methods to extract these characteristics. The user only has to set his preferred parameters depending on the data available and the module will automatically proceed a single polygon or a complete `.geojson` file. We extract the following characteristics:
 
 * Localization (latitude, longitude)
 * Tilt angle
