@@ -1,4 +1,92 @@
-# `PyPVRoof`: a Python package for the modular extraction of minimal metadata or rooftop PV installations
+# PyPVRoof
+
+A Python package for extracting characteristics of rooftop PV installations.
+
+## Installation
+
+You can install the package using pip:
+
+```bash
+pip install pypvroof
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/yourusername/pypvroof.git
+cd pypvroof
+pip install -e .
+```
+
+## Documentation
+
+- [API Documentation](docs/api.md)
+- [Tutorials](docs/tutorials/)
+- [Examples](examples/)
+- [Hands-on Notebook](notebooks/hands-on.ipynb)
+
+## Quick Start
+
+```python
+import geojson
+from pypvroof import MetadataExtraction
+
+# Set up the parameters dictionary
+params = {
+    "azimuth-method": "bounding-box",
+    "tilt-method": "constant",
+    "regression-type": "constant",
+    "has-data": False,
+    "has-dem": False,
+    "constant-tilt": 30,
+    "default-coefficient": 1/(6.5)
+}
+
+# Initialize the extractor (will use default LUT-France)
+extraction = MetadataExtraction(p=params)
+
+# Load your geojson file
+with open('path/to/your/input.geojson', 'r') as f:
+    polygons = geojson.load(f)
+
+# Process a single polygon
+polygon = polygons['features'][0]
+
+# Extract characteristics
+characteristics = extraction.extract_all_characteristics(polygon, save_ext=False)
+```
+
+## Repository Structure
+
+```
+pypvroof/
+├── src/                    # Package source code
+├── examples/              # Example scripts
+│   ├── basic_usage.py
+│   └── advanced_usage.py
+├── notebooks/            # Jupyter notebooks
+│   ├── hands-on.ipynb
+│   └── advanced_features.ipynb
+├── docs/                # Additional documentation
+│   ├── api.md
+│   └── tutorials/
+├── tests/              # Test suite
+├── setup.py
+├── README.md
+└── LICENSE
+```
+
+## Features
+
+- Extract PV roof characteristics from GeoJSON polygons
+- Support for multiple computation methods
+- Default LUT-France included
+- Custom lookup table support
+- Flexible parameter configuration
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Overview and motivation
 
@@ -22,65 +110,6 @@ The flowchart of the package is summarized below:
 <p align="center">
 <img src="assets/flowchart.png" width=700px>
 </p>
-
-## Usage
-
-We recommend that you create a virtual environment. With conda, you can do it as follows:
-
-```python
-  conda env create --file env.yml
-  conda activate characteristics
-```
-
-### A minimal example 
-
-You can use this module in you own scripts. You can do it as follows:
-
-```python
-  from src import main
-  import geojson
-  
-  # Set up the dictionnary with the minimal parameters:
-  p = {
-    "azmiuth-method" : "bounding-box",
-    'tilt-method'    : 'constant',
-    'regression-type': "constant",
-    "has-data"       : False,
-    "has-dem"        : False,
-    "output-name"    : "output",
-    "data_dir"       : "data",
-    "constant-tilt" : 30,
-    "default-coefficient" : 1/(6.5)
-  }
- 
-  # Initialize the characteristics extractor:
-  extraction = main.MedatadataExtraction(p = p)
-  
-  # The polygon that will be passed as input is an item from
-  # a geojson list. 
-  polygons = geojson.load(open('path/to/your/input/file'))
-  polygon = polygons[features][0] # take for instance the first element.
-  
-  # Compute the characteristics
-  
-  azimuth = extraction.compute_azimuth(polygon)
-  tilt = extraction.compute_tilt(polygon)
-  surface = extraction.compute_surface(polygon, tilt = tilt) 
-  installed_capacity = extraction.compute_installed_capacity(polygon, tilt = tilt, surface = surface)
-  
-  # or, alternatively, extract all characteristics at once:
-  characteristics = extraction.extract_all_characteristics(polygon, save_ext = False)
-```
-And that's it ! Your characteristics are returned as a `tuple` or a `pandas.DataFrame` depending on the number of polygons passed as input. If `save_ext` is set to `True`, then the `pandas.DataFrame` is saved in the `data_dir` directory.
-
-### Mapping large inventories
-
-Alternatively, if you want to extract the characteristics of a complete set of PV panel polygons, you can use this script as an executable. To do so, you'll need the following:
-* Make sure that your input data is formatted as a `.geojson` file,
-* Fill the `config.yml` file with your paths to the input and auxiliary files and the parameters,
-* Run the executable `run.py` from the root folder to launch the extraction of the PV panel characteristics.
-
-We recommend you follow the steps of our [hands-on notebook](https://github.com/gabrielkasmi/characteristics/blob/main/hands-on.ipynb) to see an example on how to run the module to extract a set of characteristics from a `.geojson` file. 
 
 ## Citation
 

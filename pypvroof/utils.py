@@ -8,7 +8,7 @@ from scipy import interpolate
 import os
 from sklearn.linear_model import TheilSenRegressor
 from shapely.geometry import Polygon, Point
-import gdal
+from osgeo import gdal
 import itertools
 from scipy.spatial import distance
 from pyproj import Transformer
@@ -181,6 +181,8 @@ def find_raster(polygon, folder, conversion = None):
         converted = convert(coordinates, conversion)
         array = Polygon(converted)
 
+        print('converti')
+
     else:
 
         array = Polygon(polygon['geometry']['coordinates'][0])
@@ -192,6 +194,8 @@ def find_raster(polygon, folder, conversion = None):
     # get the list of rasters
     rasters = os.listdir(folder)
     rasters = [r for r in rasters if r[-3:] == 'tif']
+
+    print(rasters)
 
     # initialize the raster by setting it as a Non
     # if after the loop the raster remains a None, it means
@@ -510,7 +514,7 @@ def check_phi(phi, offset = 45):
     to the lower half of the circle 
     """
 
-    print(phi)
+    #print(phi)
     # rescale
     if phi > 0:
         phi  = -phi + 180

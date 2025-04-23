@@ -33,26 +33,14 @@ class LinearRegression():
     to compute the installed capacity as a function of the surface 
     """
 
-    def __init__(self, cf = None, params = None) -> None:
+    def __init__(self, params = None) -> None:
 
-        if cf is not None:
+        self.type = params['regression-type']
 
-            self.type = cf.get('regression-type')
-
-            if self.type == "clustered":
-                self.clusters = cf.get('regression-clusters')
-            
-            if self.type == "constant": 
-                self.default = cf.get('default-coefficient')
-
-        if params is not None:
-
-            self.type = params['regression-type']
-
-            if self.type == 'clustered':
-                self.clusters = params['regression-clusters']
-            if self.type == "constant":
-                self.default = params['default-coefficient']
+        if self.type == 'clustered':
+            self.clusters = params['regression-clusters']
+        if self.type == "constant":
+            self.default = params['default-coefficient']
 
 
     def initialize_coefficients(self, data = None):
@@ -126,85 +114,90 @@ class LUT():
     it then uses it to return the estimated tilt of the installation.
     """
 
-    def __init__(self, data = None, cf = None, params = None, lut = None) -> None:
+    def __init__(self,  lut) -> None:
         """
-        initlaization is done either with the config file
-        or a dictionnary of parameters specified by the user
+        should input a looktup table with the same format as the one provided
+        in the data/lut.json file.
+
+        the constructor for custom look up tables is not implemented yet.
         """
 
-        self.data = data
-        self.lookup = lut
 
-        if cf is not None:
-            self.steps = cf.get('lut-steps')
-            self.clusters = cf.get('regression-clusters')
+        self.surface_categories = lut['surface_categories']
+        self.longitude_categories = lut['longitude_categories']
+        self.latitude_categories = lut['latitude_categories']
 
-        if params is not None:
-            self.steps = params['lut-steps']
-            self.clusters = params['regression-clusters']
+        # convert the lookup table as an array
+        self.lookup_table = {cat : np.array(lut['lut'][cat]) for cat in self.surface_categories.keys()}
 
-    def initialize(self):
 
-        # define the geographical boundaries of the look up table
 
-        if self.lookup is None:
+#        if params is not None:
+#            self.steps = params['lut-steps']
+#            self.clusters = params['regression-clusters']
 
-            if self.data is None:
-                raise ValueError('The data dataframe needs to be a dataframe object.')
-
-            south, north = np.floor(np.min(self.data["lat"])), np.ceil(np.max(self.data['lat']))
-            west, east = np.floor(np.min(self.data["lon"])), np.ceil(np.max(self.data['lon']))
+#    def initialize(self):
+#
+#        # define the geographical boundaries of the look up table
+#
+#        if self.lookup is None:
+#
+#            if self.data is None:
+#                raise ValueError('The data dataframe needs to be a dataframe object.')
+#
+#            south, north = np.floor(np.min(self.data["lat"])), np.ceil(np.max(self.data['lat']))
+#            west, east = np.floor(np.min(self.data["lon"])), np.ceil(np.max(self.data['lon']))
 
             # compute the latitude and longitude categories dictionnaries
             # these dictionnary associate a key (i.e. an int, corresponding to a coordinate)
             # to a localization 
-            latitudes_categories, longitude_categories = utils.create_geo_categories(west, east, south, north, self.steps)
+#            latitudes_categories, longitude_categories = utils.create_geo_categories(west, east, south, north, self.steps)
 
             # define the number of clusters to compute the surface categories
             # surface categories are based on the distribution of projected surfaces
             # as we do not know the tilt yet.
 
-            n_quantiles = self.clusters - 1
-            surface_categories = utils.create_surface_categories(n_quantiles, self.data)
+ #           n_quantiles = self.clusters - 1
+ #           surface_categories = utils.create_surface_categories(n_quantiles, self.data)
 
-            self.surface_categories = surface_categories
-            self.longitude_categories = longitude_categories
-            self.latitude_categories = latitudes_categories
+ #           self.surface_categories = surface_categories
+ #           self.longitude_categories = longitude_categories
+ #           self.latitude_categories = latitudes_categories
 
-        else: 
-            pass
+  #      else: 
+  #          pass
         
-        return None
+#        return None
 
 
-    def generate_lut(self):
-        """
-        creates the look up table
-        """
+    #def generate_lut(self):
+    #    """
+    #    creates the look up table
+    #    """
 
-        # initialize the "marginal" dictionnaries (surface, latitude and longitude categories)
-        self.initialize()
+    #    # initialize the "marginal" dictionnaries (surface, latitude and longitude categories)
+    #    self.initialize()
 
-        if self.lookup is None:
+    #    if self.lookup is None:
 
             # associate each installation of the dataframe to a category
-            utils.assign_categories(self.data, self.surface_categories, self.latitude_categories, self.longitude_categories)
+#        utils.assign_categories(self.data, self.surface_categories, self.latitude_categories, self.longitude_categories)
 
             # create the lut
-            lut = utils.create_LUT(self.data, self.surface_categories, self.latitude_categories, self.longitude_categories)
+#        lut = utils.create_LUT(self.data, self.surface_categories, self.latitude_categories, self.longitude_categories)
 
             # store the look up table
-            self.lut = lut
+#            self.lut = lut
 
-        else:
-            print('Importing a lookup table. The file should contain the LUT and the categories.')
+#        else:
+#            print('Importing a lookup table. The file should contain the LUT and the categories.')
             
-            self.surface_categories = self.lookup['surface_categories']
-            self.longitude_categories = self.lookup['longitude_categories']
-            self.latitude_categories = self.lookup['latitude_categories']
+            #self.surface_categories = self.lookup['surface_categories']
+            #self.longitude_categories = self.lookup['longitude_categories']
+            #self.latitude_categories = self.lookup['latitude_categories']
 
             # convert the lookup table as an array
-            self.lut = {cat : np.array(self.lookup['lut'][cat]) for cat in self.surface_categories.keys()}
+            #self.lut = {cat : np.array(self.lookup['lut'][cat]) for cat in self.surface_categories.keys()}
 
 
     def return_tilt(self, polygon, surface):
@@ -233,43 +226,35 @@ class LUT():
         if not isinstance(lon_id, int):
             lon_id = int(lon_id)
 
-        return self.lut[surface_id][lat_id, lon_id]
+        return self.lookup_table[surface_id][lat_id, lon_id]
 
 class TheilSen():
     """
     implements the Theil Sen regressor on a DEM to compute the tilt and azimuth
     """
 
-    def __init__(self, cf = None, params = None) -> None:
+    def __init__(self, params) -> None:
+        """
+        conversion: handles a potential 
+        """
 
-        if cf is not None:
+        # optional parameters
+        self.seed = int(params['seed']) if 'seed' in params else 42
+        self.N = int(params['N']) if 'N' in params else 10 
+        self.M = int(params['M']) if 'M' in params else 1000
+        self.offset = int(params['offset']) if 'offset' in params else 25
 
-            M = cf.get('M')
-            self.M = 1000 if M == "None" else M
+        # conversion between the coordinates systems
+        self.conversion = params['conversion'] if "conversion" in params else "epsg:4326,epsg:2154"
 
-            N = cf.get('N')
-            self.N = 10 if N == "None" else M
+        print('conversion file')
+        print(self.conversion)
 
-            seed = cf.get('seed')
-            self.seed = 42 if seed == "None" else seed
 
-            self.offset = cf.get('offset')
-            self.folder = cf.get('raster-folder')
-            conversion = cf.get('conversion')
-            self.conversion = None if conversion == "None" else conversion
-
-        if params is not None:
-
-            # optional parameters
-            self.seed = int(params['seed']) if "seed" in params.keys() else 42
-            self.N = int(params['N']) if "N" in params.keys() else 10
-            self.M = int(params['M']) if "M" in params.keys() else 1000
-
-            # main parameters
-            self.offset = params['offset']
-            self.folder = params['raster-folder']
-            self.conversion = params['conversion']
-        
+        if 'raster-folder' not in params:
+            raise ValueError("must input a path to the DEM data")
+        self.folder = params['raster-folder']
+    
     def estimate_tilt_and_azimuth(self, polygon):
         
         # retrieve the DSM and the pixel coords of the polygon
