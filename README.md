@@ -31,7 +31,7 @@ The supplementary data is accessible on our Zenodo repository: [![DOI](https://z
 
 ```python
 import geojson
-from pypvroof.main import MetadataExtraction
+from pypvroof import MetadataExtraction
 
 
 # load the data 
