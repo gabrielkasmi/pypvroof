@@ -29,31 +29,37 @@ pip install -e .
 
 ```python
 import geojson
-from pypvroof import MetadataExtraction
+from pypvroof.main import MetadataExtraction
 
-# Set up the parameters dictionary
+
+# load the data 
+index =1356
+arrays=geojson.load(open("input/arrays_69.geojson"))
+case=arrays['features'][index]
+
+
+# Example parameters dictionary
 params = {
     "azimuth-method": "bounding-box",
-    "tilt-method": "constant",
-    "regression-type": "constant",
-    "has-data": False,
-    "has-dem": False,
-    "constant-tilt": 30,
-    "default-coefficient": 1/(6.5)
+    "tilt-method": "lut",
+#    "raster-folder":"input"
+    "regression-type": "linear",
+#    "has-data": False,
+#    "has-dem": False,
+#    "constant-tilt": 30,
+#    "default-coefficient": 1/(6.5)
 }
 
-# Initialize the extractor (will use default LUT-France)
-extraction = MetadataExtraction(p=params)
+# initialize the object for extracting the metadata
+extractor = MetadataExtraction(p=params)
 
-# Load your geojson file
-with open('path/to/your/input.geojson', 'r') as f:
-    polygons = geojson.load(f)
+# extract all characteristics at once for a single polygon
+characteristics = extractor.extract_all_characteristics(case)
 
-# Process a single polygon
-polygon = polygons['features'][0]
 
-# Extract characteristics
-characteristics = extraction.extract_all_characteristics(polygon, save_ext=False)
+# or if you want a dataframe with all the characteristics for multiple polygons
+
+dataframe = extractor.extract_all_characteristics(arrays)
 ```
 
 ## Repository Structure
@@ -95,7 +101,7 @@ The supplementary data is accessible on our Zenodo repository: [![DOI](https://z
 
 This repository provides an all-in-one approach for extracting metadata of rooftop PV installations. The approach is modular, depending on the data available, we use different methods to extract these characteristics. The user only has to set his preferred parameters depending on the data available and the module will automatically proceed a single polygon or a complete `.geojson` file. We extract the following characteristics:
 
-* Localization (latitude, longitude
+* Localization (latitude, longitude)
 * Tilt angle
 * Azimuth angle
 * Surface
