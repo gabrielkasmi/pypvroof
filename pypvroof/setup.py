@@ -30,5 +30,8 @@ setup(
         "matplotlib",
         "geojson",
         "tqdm",
+        "GDAL>=3.6.2",
+        "shapely",
+        "rasterio",
     ],
 ) 
