@@ -4,19 +4,40 @@ A Python package for extracting characteristics of rooftop PV installations.
 
 ## Installation
 
+### Basic Installation
+
 You can install the package using pip:
 
 ```bash
 pip install pypvroof
 ```
 
-Or install from source:
+GDAL can cause the installation to fail. Make sure to have GDAL on your environment, as GDAL requires additional system dependencies. 
+
+To install GDAL, e.g. on MacOS, run the following:
+```bash
+brew install gdal
+```
+
+### Installation from Source
 
 ```bash
 git clone https://github.com/gabrielkasmi/pypvroof.git
 cd pypvroof
 pip install -e .
 ```
+
+For development from source with all extras:
+```bash
+pip install -e ".[dev,gdal]"
+```
+
+## System Requirements
+
+- Python >= 3.8
+- Core dependencies are automatically installed
+- GDAL >= 3.6.2 (optional, for DEM processing)
+- System-level GDAL installation might be required for full functionality
 
 ## Documentation
 

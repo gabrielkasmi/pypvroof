@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pypvroof",
-    version="0.1.0",
+    version="0.1.1",
     author="Gabriel Kasmi",
     author_email="gabriel.kasmi@minesparis.psl.eu",
     description="A Python package for PV roof mapping and analysis",
@@ -24,14 +24,21 @@ setup(
     ],
     python_requires=">=3.8",
     install_requires=[
-        "numpy",
-        "pandas",
-        "scikit-learn",
-        "matplotlib",
-        "geojson",
-        "tqdm",
-        "GDAL>=3.6.2",
-        "shapely",
-        "rasterio",
+        "numpy>=1.21.0",
+        "pandas>=1.3.0",
+        "scikit-learn>=1.0.0",
+        "matplotlib>=3.4.0",
+        "geojson>=2.5.0",
+        "tqdm>=4.62.0",
+        "shapely>=1.8.0",
+        "rasterio>=1.2.0",
     ],
+    extras_require={
+        "gdal": ["GDAL>=3.6.2"],
+        "dev": [
+            "pytest>=6.0",
+            "black>=21.0",
+            "flake8>=3.9",
+        ],
+    },
 ) 
