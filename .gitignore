@@ -38,3 +38,6 @@ wheels/
 env/
 venv/
 ENV/
+
+input/
+debug.ipynb
