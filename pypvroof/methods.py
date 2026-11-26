@@ -1,15 +1,10 @@
 # -*- coding: utf-8 -*-
 
 # libraries
-import sys
-import os
-
-current_dir = os.path.dirname(__file__)
-sys.path.insert(0, current_dir)
-
 import numpy as np
 from area import area
-import utils
+
+from . import utils
 
 # contains the functions necessary to implement 
 # the various methods
@@ -226,7 +221,21 @@ class LUT():
         if not isinstance(lon_id, int):
             lon_id = int(lon_id)
 
-        return self.lookup_table[surface_id][lat_id, lon_id]
+        grid = self.lookup_table[surface_id]
+        tilt = grid[lat_id, lon_id]
+        if not np.isnan(tilt):
+            return tilt
+
+        # ~45% of the cells are NaN (outside the convex hull of the points the
+        # LUT was interpolated from). A NaN tilt propagates to the surface and
+        # the installed capacity, so fall back to the nearest non-NaN cell of
+        # the same surface category.
+        valid = np.argwhere(~np.isnan(grid))
+        if valid.size == 0:
+            return tilt
+        dists = np.sum((valid - np.array([lat_id, lon_id])) ** 2, axis=1)
+        nearest = valid[np.argmin(dists)]
+        return grid[nearest[0], nearest[1]]
 
 class TheilSen():
     """

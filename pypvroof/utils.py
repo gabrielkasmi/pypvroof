@@ -6,14 +6,19 @@ import numpy as np
 import pandas as pd
 from scipy import interpolate
 import os
-from sklearn.linear_model import TheilSenRegressor
 from shapely.geometry import Polygon, Point
-from osgeo import gdal
 import itertools
 from scipy.spatial import distance
 from pyproj import Transformer
-import matplotlib.pyplot as plt
-import cv2 as cv
+
+
+def _import_gdal():
+    """GDAL is importable as `osgeo.gdal` or, on some systems, as `gdal`."""
+    try:
+        from osgeo import gdal
+    except ImportError:
+        import gdal
+    return gdal
 
 def compute_mask_from_polygon(shape, pixel_coords):
     """
@@ -206,7 +211,7 @@ def find_raster(polygon, folder, conversion = None):
     for r in rasters:
 
         # open the raster
-        candidate = gdal.Open(os.path.join(folder, r))
+        candidate = _import_gdal().Open(os.path.join(folder, r))
 
         polygon = transform_to_polygon(candidate)
 
@@ -415,21 +420,20 @@ def return_latitude_and_longitude_ids(center, latitude_categories, longitude_cat
     """
 
     lon, lat = center
-        
-    for latitude_key in latitude_categories.keys():
-        lb, ub = latitude_categories[latitude_key]
-        if lat <= ub and lat > lb:  
-            lat_id = latitude_key
-            break
-            
-    
-    for longitude_key in longitude_categories.keys():
-        lb, ub = longitude_categories[longitude_key]
-        if lon <= ub and lon > lb:
-            lon_id = longitude_key
-            break
-            
-    return lat_id, lon_id
+
+    def _find(value, categories):
+        # category containing the value; outside the grid, the closest
+        # category (instead of an UnboundLocalError)
+        keys = list(categories.keys())
+        for key in keys:
+            lb, ub = categories[key]
+            if lb < value <= ub:
+                return key
+        if value <= categories[keys[0]][0]:
+            return keys[0]
+        return keys[-1]
+
+    return _find(lat, latitude_categories), _find(lon, longitude_categories)
 
 
 
@@ -531,6 +535,9 @@ def reload(dem):
     Erases the file on the fly
     """
 
+    import matplotlib.pyplot as plt
+    import cv2 as cv
+
     plt.imsave("temp.png", dem)
     dsm = cv.imread("temp.png", 0)
     os.remove("temp.png") 
@@ -545,6 +552,8 @@ def theil_sen_estimator(mask, dem, M=1000, N=10, random_state=42):
 
     mask and dem should be geographically identical.
     """
+
+    from sklearn.linear_model import TheilSenRegressor
 
     # workaround to make the algorithm work
     dsm = reload(dem)

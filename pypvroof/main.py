@@ -1,21 +1,19 @@
 # -*- coding: utf-8 -*-
 
 # libraries
-import sys
-import os 
+import os
 import json
-import pkg_resources
-from pathlib import Path
-
-current_dir = os.path.dirname(__file__)
-sys.path.insert(0, current_dir)
+from importlib import resources
 
 import pandas as pd
 import numpy as np
-import methods
 
-import warnings
-warnings.filterwarnings("ignore")
+from . import methods
+
+
+def _package_data_path(name):
+    """Absolute path of a file shipped in pypvroof/data."""
+    return str(resources.files('pypvroof').joinpath('data', name))
 
 
 class MetadataExtraction():
@@ -45,7 +43,7 @@ class MetadataExtraction():
         # Load lookup table
         if lut is None:
             # Use default LUT-France
-            lut_file = pkg_resources.resource_filename('pypvroof', 'data/lut_france.json')
+            lut_file = _package_data_path('lut_france.json')
             with open(lut_file, 'r') as f:
                 self.lut = json.load(f)
         elif isinstance(lut, str):
@@ -57,6 +55,7 @@ class MetadataExtraction():
             self.lut = lut
 
         # Initialize other attributes from params
+        self._lut_from_constructor = lut is not None
         self._initialize_from_params()
 
         # Fill self.params with default values if p is None, or add missing keys if p exists
@@ -125,12 +124,16 @@ class MetadataExtraction():
                 self.data_name = self.params.get('data-name')
             
             else:
-                self.data_dir = pkg_resources.resource_filename('pypvroof', 'data')
+                self.data_dir = _package_data_path('')
                 self.data_name = 'bdappv-metadata.csv'
 
-        
+
         if self.tilt_method == 'lut':
             self.lut_table = self.params.get('lut-table', None)
+            # a LUT passed to the constructor (dict or path) takes precedence
+            # over the default one
+            if self.lut_table is None and self._lut_from_constructor:
+                self.lut_table = self.lut
 
 
         self._load_data()
@@ -146,11 +149,17 @@ class MetadataExtraction():
         # if tilt_method is lut, load the lookup table
         if self.tilt_method == 'lut':
 
-            # go the the paths that is either the default one or the one provided by the user
+            # either the default LUT, a dict, or a path (absolute, or relative
+            # to the data directory)
             if self.lut_table is None:
-                self.lut_table = json.load(open(pkg_resources.resource_filename('pypvroof', 'data/lut_france.json')))
-            else:
-                self.lut_table = json.load(open(os.path.join(self.data_dir, self.lut_table)))
+                with open(_package_data_path('lut_france.json')) as f:
+                    self.lut_table = json.load(f)
+            elif isinstance(self.lut_table, str):
+                path = self.lut_table
+                if not os.path.isfile(path) and getattr(self, 'data_dir', None):
+                    path = os.path.join(self.data_dir, path)
+                with open(path) as f:
+                    self.lut_table = json.load(f)
 
     def extract_all_characteristics(self, data):
         """

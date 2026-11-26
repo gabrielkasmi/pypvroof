@@ -2,7 +2,7 @@
 pypvroof - A Python package for PV roof mapping and analysis
 """
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 from .main import MetadataExtraction
 
