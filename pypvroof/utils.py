@@ -5,258 +5,8 @@
 import numpy as np
 import pandas as pd
 from scipy import interpolate
-import os
-from shapely.geometry import Polygon, Point
-import itertools
-from scipy.spatial import distance
-from pyproj import Transformer
+from shapely.geometry import shape
 
-
-def _import_gdal():
-    """GDAL is importable as `osgeo.gdal` or, on some systems, as `gdal`."""
-    try:
-        from osgeo import gdal
-    except ImportError:
-        import gdal
-    return gdal
-
-def compute_mask_from_polygon(shape, pixel_coords):
-    """
-    returns a binary mask with the same shape as 
-    the dsm
-    """
-
-    # initialize the mask
-    mask = np.zeros(shape)
-
-    # set up for the intersection between the 
-    # coordinates and the polygon
-    X, Y = shape
-
-    polygon = Polygon(pixel_coords)
-
-    for x, y in itertools.product(range(X), range(Y)):
-
-        pixel = Point(x,y)
-        if polygon.intersects(pixel):
-
-            mask[y,x] = 1
-
-    return mask
-
-def coord_to_pixel(point, geotransform):
-    """
-    converts a pixel as a point
-    expressed in the reference frame of the raster
-    from which the geotransform is extracted.
-    
-    returns xNN, yNN the (x,y) coordinates 
-    in pixel of the point.
-    """ 
-    
-    x, y = point
-    
-    ulx, xres, _, uly, _, yres  = geotransform 
-    
-    xNN = (x - ulx) / xres
-    yNN = (y - uly) / yres
-
-    return int(xNN), int(yNN)
-
-def extract_thumbnail(array, offset, raster):
-    """
-    extracts a thumbnail containing the polygon from the 
-    raster
-    """
-
-    # get the geotransform
-    ulx, xres, _, uly, _, yres = raster.GetGeoTransform()
-
-    # convert the coordinates as a shapely polygon
-    #coords = polygon['geometry']['coordinates'][0]
-    #coordinates = Polygon(polygon['geometry']['coordinates'][0])
-
-    # get the boundaries (in geo coordinates)
-    minx, miny, maxx, maxy = array.bounds
-
-    # express the boundaries in terms of pixels
-    minX = (minx - ulx) / xres
-    maxX = (maxx - ulx) / xres
-
-    minY = (miny - uly) / yres
-    maxY = (maxy - uly) / yres
-
-    # define the dimensions of the thumbnail, based on the
-    # boundaries of the polygon and the offset parameter
-
-    left = minX - offset
-    right = maxX + offset
-    bottom = minY + offset
-    top = maxY - offset
-
-
-    width = np.abs(right - left)
-    height = np.abs(bottom - top)
-
-    # extract the thumbnail based on the upper left corner
-    # and the width and height of the thumbnail
-
-    band = raster.GetRasterBand(1) # there is only one band to extract
-    dsm = band.ReadAsArray(int(left), int(top), int(width), int(height))
-
-    # express the coordinates of the array polygon relative to the 
-    # dsm thumbnail
-    xx, yy = array.exterior.coords.xy
-    coords = [[x,y] for x,y in zip([x for x in xx], [y for y in yy])]
-    pixel_coord = np.array([coord_to_pixel(c, raster.GetGeoTransform()) for c in coords])
-
-    pixel_coord[:,0] -= int(left)
-    pixel_coord[:,1] -= int(top)
-
-    return dsm, pixel_coord
-
-def transform_to_polygon(raster):
-    """
-    transforms a gdal raster as a polygon
-    """
-
-    # get the shape (in pixels) and the coordinates
-    # of the raster
-    width, height = raster.RasterXSize, raster.RasterYSize
-    left, xres, _, top, _, yres = raster.GetGeoTransform()
-
-    right = left + width / xres
-    bottom = top + height / yres
-
-    coordinates = np.array([
-        [left, top],
-        [right, top],
-        [right, bottom],
-        [left, bottom],
-        [left, top]
-    ])
-
-    polygon = Polygon(coordinates)
-
-    return polygon
-
-def convert(coordinates, conversion):
-    """
-    converts the coordinates
-
-    conversion is a list with the in_proj, out_proj
-    specified in epsg format
-
-    coordinates is a np.ndarray
-    """
-    
-    in_epsg, out_epsg = conversion.split(',')
-
-    transformer = Transformer.from_crs(in_epsg, out_epsg)
-
-    if isinstance(coordinates, np.ndarray):
-        coordinates = np.atleast_2d(coordinates)
-        converted = np.array(transformer.transform(coordinates[:, 1], coordinates[:, 0]))
-        return converted.transpose()
-    else:
-        x, y = transformer.transform(coordinates[1], coordinates[0])
-        return (x, y)
-
-def find_raster(polygon, folder, conversion = None):
-    """
-    finds and returns the raster that contains the polygon
-
-    input : 
-    - polygon : a dictionnary from a geojson file
-    - folder : a str corresponding to the directory where the DEM rasters are located
-
-    Remark: the rasters should be geotiff images that can be opened by gdal.
-
-    returns :
-    - raster : a gdal raster 
-    - array : the array as a polygon, under the correct coordinates system
-    """
-
-    # should be a polygon, if it does not work then
-    # the data format is ill specified
-    #try:
-    if conversion is not None:
-
-        coordinates = np.array(polygon['geometry']['coordinates'][0])
-        converted = convert(coordinates, conversion)
-        array = Polygon(converted)
-
-        print('converti')
-
-    else:
-
-        array = Polygon(polygon['geometry']['coordinates'][0])
-
-    #except:
-
-        #print('Characteristics extraction can only be done on polygons. Check the data format.')
-    
-    # get the list of rasters
-    rasters = os.listdir(folder)
-    rasters = [r for r in rasters if r[-3:] == 'tif']
-
-    print(rasters)
-
-    # initialize the raster by setting it as a Non
-    # if after the loop the raster remains a None, it means
-    # that no matching raster has been found
-    # in this case, an error will be raised.
-    raster = None
-
-    for r in rasters:
-
-        # open the raster
-        candidate = _import_gdal().Open(os.path.join(folder, r))
-
-        polygon = transform_to_polygon(candidate)
-
-        if polygon.contains(array):
-            raster = candidate
-            break
-
-    return raster, array
- 
-def extract_dem_from_raster(polygon, offset, folder, conversion):
-        """
-        extracts a thumbnail (returned as np.ndarray) from 
-        the dem raster centered around the polygon
-
-        the offset corresponds to the width (in pixels) between the boundaries of 
-        the polygon and the boundaries of the thumbnail.
-
-        returns the transform as well, which are needed to generate the
-        mask of the polygon (which is also a np.ndarray)
-
-        args:
-
-        - polygon: a geojson dictionnary
-        - offset : an int, corresponding to the desired offset between 
-                   the edges of the polygon and the borders of the thumbnail
-        - folder : the folder where the raster is located. The function automatically
-                   looks for the raster that contains the polygon in the folder.
-
-        WARINING
-        To work, the coordinates sytem of the polygon and of the raster 
-        should be identical
-        """
-
-        # find the raster that contains the polygon
-        raster, array = find_raster(polygon, folder, conversion = conversion)
-
-        if raster is None:
-                raise ValueError('3D DEM corresponding to the polygon not found. Please input the raster or choose another method.')
-
-        # extract the thumbnail with the desired offset
-        # returns as a by product the pixel coords of the polygon
-        # relative to the dsm
-        dsm, pixel_coord = extract_thumbnail(array, offset, raster)
-
-        return dsm, pixel_coord
 
 def create_geo_categories(west, east, south, north, steps):
     """
@@ -497,132 +247,41 @@ def create_LUT(df, surfaces_categories, latitudes_categories, longitude_categori
 
     return LUT
 
-def check_phi(phi, offset = 45):
-    """
-    rescale phi to make it point northwards
-    and rotating eastwards:
-
-    before : 
-    0 : south 
-    -90 : west
-    90 : east
-    (-)180 : north
-
-    after:
-    0 : north
-    -90 : west
-    90 : east
-    (-)180 : south
-
-    also applies an offset that reprojects the angle 
-    to the lower half of the circle 
-    """
-
-    #print(phi)
-    # rescale
-    if phi > 0:
-        phi  = -phi + 180
-
-    else:
-        phi = np.abs(phi) - 180
-
-    return phi
-
-
-def reload(dem):
-    """
-    save the dem and reloads it with open cv.imread
-    Erases the file on the fly
-    """
-
-    import matplotlib.pyplot as plt
-    import cv2 as cv
-
-    plt.imsave("temp.png", dem)
-    dsm = cv.imread("temp.png", 0)
-    os.remove("temp.png") 
-
-    return dsm
-
-def theil_sen_estimator(mask, dem, M=1000, N=10, random_state=42):
-
-    """
-    mask : a np.array of a binary raster
-    dem : a np.array of a rasterized DEM. 
-
-    mask and dem should be geographically identical.
-    """
-
-    from sklearn.linear_model import TheilSenRegressor
-
-    # workaround to make the algorithm work
-    dsm = reload(dem)
-    masked_mns = dsm * mask
-
-    # Get position of mask's pixels
-    X = np.argwhere(masked_mns>0)  # coord y,x in numpy arrays
-    # Get associated altitude
-    y = masked_mns[np.where(masked_mns>0)]
-    # Fit TheilSen regressor to data
-    reg = TheilSenRegressor(random_state=random_state, n_subsamples=N, max_subpopulation=M, verbose=False).fit(X, y)
-    # Get regressor coefficients
-    a, b = reg.coef_
-    c = reg.intercept_
-    # Derive orientation phi
-    phi = np.arctan2(-b, a) * (180/np.pi)
-    # Derive tilt theta
-    d = np.sqrt(a**2 + b**2) 
-    h = 0.5*(reg.predict([reg.coef_])[0]-c)
-    theta = np.arctan(h/d) * (180/np.pi)
-    # Return results
-
-    return check_phi(phi + 180), theta.item() # shift the orientation to the south
+def _largest_polygon(geometry):
+    geom = shape(geometry) if isinstance(geometry, dict) else geometry
+    if geom.geom_type == "MultiPolygon":
+        geom = max(geom.geoms, key=lambda g: g.area)
+    return geom
 
 
 def azimuth_bounding_box(polygon):
     """
-    computes the probable azimuth of the installation using 
-    the polygon and its minimum bounding rectangle
+    Probable azimuth of the installation from the minimum rotated rectangle
+    of the polygon (coordinates in lon/lat, EPSG:4326).
 
-    returns the angle relative to south :
+    The installation is assumed to face one of the two directions orthogonal
+    to the long side of the rectangle; the one facing the equator (closest to
+    south) is returned, as panels facing north are rare. The 180 degrees
+    ambiguity cannot be resolved from the footprint alone (use the Theil-Sen
+    method on a DSM for that).
 
-    0 = south
-    -90 = west
-    90 = east
-    180 = north
-
-    applies a heuristic that "reprojects" panels facing north (i.e. if the azimuth 
-    is larger than 135 degrees in absolute value) towards south
+    Returns degrees, 0 = north, clockwise (90 = east, 180 = south, 270 = west),
+    in [90, 270].
     """
-
-    poly = Polygon(polygon['geometry']["coordinates"][0])
-    x,y = poly.minimum_rotated_rectangle.exterior.coords.xy # split the tuple into the x and y coordinates. returned starting from the UR corner
-                                                            # and rotating counter clockwise
-    # get the points from the bounding rectangle
-    ulx, uly = x[1], y[1]
-    llx, lly = x[2], y[2]
-    lrx, lry = x[3], y[3]
-
-    # compute lenghts of the two sides of the rectangle
-    long = distance.euclidean((lrx, lry), (llx, lly))
-    short = distance.euclidean((ulx, uly), (llx, lly))
-
-    # compute the two associated angles
-    angle_short = 90 - (np.arctan2(
-        (lry- lly), (lrx - llx)
-    ) * 180 / np.pi)
-
-    angle_long = - 90 + (np.arctan2(
-        (uly - lly), (ulx - llx)
-    ) * 180 / np.pi)
-
-    # aggregate in a dictionnary
-    angles = {
-        long : angle_long,
-        short : angle_short
-    }
-
-    # return the angle attached to the longest side of the rectangle
-    raw_phi = angles[np.max([long, short])]
-
-    return check_phi(raw_phi).item()
+    if isinstance(polygon, dict):
+        polygon = polygon.get("geometry", polygon)
+    geom = _largest_polygon(polygon)
+    lon0, lat0 = geom.centroid.x, geom.centroid.y
+    # local metric frame (x east, y north)
+    k = np.cos(np.radians(lat0))
+    x, y = geom.minimum_rotated_rectangle.exterior.coords.xy
+    x = (np.asarray(x) - lon0) * k
+    y = np.asarray(y) - lat0
+    e1 = np.array([x[1] - x[0], y[1] - y[0]])
+    e2 = np.array([x[2] - x[1], y[2] - y[1]])
+    dx, dy = e1 if np.hypot(*e1) >= np.hypot(*e2) else e2
+    if dx == 0 and dy == 0:
+        return 180.0
+    # normals to the long side, as azimuths (0 = north, clockwise)
+    candidates = [np.degrees(np.arctan2(dy, -dx)) % 360, np.degrees(np.arctan2(-dy, dx)) % 360]
+    return float(min(candidates, key=lambda a: abs(a - 180.0)))

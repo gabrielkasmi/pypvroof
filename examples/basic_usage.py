@@ -27,7 +27,7 @@ def main():
     polygon = polygons['features'][0]
     
     # Extract characteristics
-    characteristics = extraction.extract_all_characteristics(polygon, save_ext=False)
+    characteristics = extraction.extract_all_characteristics(polygon)
     print("Extracted characteristics:", characteristics)
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pypvroof",
-    version="0.1.2",
+    version="0.2.0",
     author="Gabriel Kasmi",
     author_email="gabriel.kasmi@minesparis.psl.eu",
     description="A Python package for PV roof mapping and analysis",
@@ -27,19 +27,14 @@ setup(
         "numpy>=1.21.0",
         "pandas>=1.3.0",
         "scipy>=1.7.0",
-        "shapely>=1.8.0",
+        "shapely>=2.0.0",
         "pyproj>=3.0.0",
+        "rasterio>=1.3.0",
+        "geopandas>=0.14.0",
         "area>=1.1.0",
         "geojson>=2.5.0",
     ],
     extras_require={
-        # legacy raster Theil-Sen (local DEM folder)
-        "dem": [
-            "GDAL>=3.6.2",
-            "opencv-python",
-            "matplotlib>=3.4.0",
-            "scikit-learn>=1.0.0",
-        ],
         "dev": [
             "pytest>=6.0",
             "black>=21.0",

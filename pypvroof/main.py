@@ -104,12 +104,15 @@ class MetadataExtraction():
 
 
 
-        # if tilt or azimuth method is "theil-sen", check that the user specified a path 
-        # to the DEM data in the parameters, otherwise throw an error
+        # if tilt or azimuth method is "theil-sen", a DSM service is needed
+        # (params "dsm-service": a DSMService, "ign", or a folder of GeoTIFFs)
 
-        if self.tilt_method=="theil-sen" or self.azimuth_method=="theil-sen":
-            if 'raster-folder' not in self.params:
-                raise ValueError("must input a path to the DEM data")
+        self._theil_sen = None
+        if self._uses_theil_sen():
+            # validates the service specification ("dsm-service" or "raster-folder")
+            self._theil_sen = methods.TheilSen(self.params)
+        self.workers = self.params.get('workers', 8)
+        self._regression = None
 
         # methods that require auxiliary data: linear or clustered regression
         # and look up table
@@ -161,51 +164,87 @@ class MetadataExtraction():
                 with open(path) as f:
                     self.lut_table = json.load(f)
 
-    def extract_all_characteristics(self, data):
+    def _uses_theil_sen(self):
+        return self.tilt_method == 'theil-sen' or self.azimuth_method == 'theil-sen'
+
+    @staticmethod
+    def _is_single_polygon(data):
+        return (isinstance(data, dict) and data.get('type', 'Feature') == 'Feature'
+                and isinstance(data.get('geometry'), dict)
+                and data['geometry'].get('type') in ('Polygon', 'MultiPolygon'))
+
+    def extract_all_characteristics(self, data, crs=None):
         """
+        Extracts all the characteristics.
 
-        Extracts all the characteristics from data
-        if data is a single array, then returns a tuple 
-            (lon, lat, tilt, azimuth, installed_capacity, surface)
+        - a single GeoJSON feature (Polygon / MultiPolygon, lon/lat) returns a
+          tuple (lon, lat, tilt, azimuth, installed_capacity, surface)
+        - anything else accepted by pypvroof.geometry.to_geodataframe (a
+          FeatureCollection, a GeoDataFrame, a list of features, a path...)
+          returns a DataFrame with the columns lon, lat, tilt, azimuth,
+          installed_capacity, surface, one row per input polygon. When the
+          theil-sen method is used, the columns status, inspect and the
+          service metadata (meta_*) are added; polygons are processed
+          concurrently (param "workers", default 8).
 
-        if data is a geojson file, returns a dataframe with all the characteristics.
-
+        `crs` is the CRS of inputs that do not carry one (default EPSG:4326).
+        Tilt / azimuth / capacity are NaN when the DSM estimation fails: no
+        fallback is applied, see the status column.
         """
-
-        if isinstance(data, dict) and data.get('geometry', {}).get('type') == 'Polygon':
-
-            tilt=self.compute_tilt(data)
-            azimuth=self.compute_azimuth(data)
-            surface=self.compute_surface(data, tilt)
-            installed_capacity=self.compute_installed_capacity(data, tilt, surface)
-
-            lon, lat=self.return_coordinates(data)
-
+        if self._is_single_polygon(data):
+            if self._uses_theil_sen():
+                r = self._theil_sen.characterize(data)
+                tilt = r['tilt'] if self.tilt_method == 'theil-sen' else self.compute_tilt(data)
+                azimuth = r['azimuth'] if self.azimuth_method == 'theil-sen' else self.compute_azimuth(data)
+            else:
+                tilt = self.compute_tilt(data)
+                azimuth = self.compute_azimuth(data)
+            surface = self.compute_surface(data, tilt)
+            installed_capacity = self.compute_installed_capacity(data, tilt, surface)
+            lon, lat = self.return_coordinates(data)
             return (lon, lat, tilt, azimuth, installed_capacity, surface)
-        
-        if isinstance(data, dict) and data.get('type') == 'FeatureCollection':
 
-            lines = []
-            for feature in data['features']:
-                lon, lat=self.return_coordinates(feature)
-                tilt=self.compute_tilt(feature)
-                azimuth=self.compute_azimuth(feature)
-                surface=self.compute_surface(feature, tilt)
-                installed_capacity=self.compute_installed_capacity(feature, tilt, surface)
+        from shapely.geometry import mapping
+        from .geometry import to_geodataframe
 
-                lines.append((lon, lat, tilt, azimuth, installed_capacity, surface))
+        gdf = to_geodataframe(data, crs=crs or self.params.get('crs'))
+        lonlat = gdf.to_crs('EPSG:4326')
+        features = [{'type': 'Feature', 'geometry': mapping(g), 'properties': {}}
+                    for g in lonlat.geometry]
 
-            return pd.DataFrame(lines, columns=['lon', 'lat', 'tilt', 'azimuth', 'installed_capacity', 'surface'])
+        ts = None
+        if self._uses_theil_sen():
+            from .bulk import characterize_roofs
+            ts = characterize_roofs(gdf[[gdf.geometry.name]], self._theil_sen.service,
+                                    params=self._theil_sen.estimator_params,
+                                    workers=self.workers)
+
+        lines = []
+        for i, feature in enumerate(features):
+            lon, lat = self.return_coordinates(feature)
+            tilt = ts['tilt'].iloc[i] if self.tilt_method == 'theil-sen' else self.compute_tilt(feature)
+            azimuth = (ts['azimuth'].iloc[i] if self.azimuth_method == 'theil-sen'
+                       else self.compute_azimuth(feature))
+            surface = self.compute_surface(feature, tilt)
+            installed_capacity = self.compute_installed_capacity(feature, tilt, surface)
+            lines.append((lon, lat, tilt, azimuth, installed_capacity, surface))
+
+        df = pd.DataFrame(lines, columns=['lon', 'lat', 'tilt', 'azimuth', 'installed_capacity', 'surface'])
+        if ts is not None:
+            df['status'] = ts['status'].values
+            df['inspect'] = ts['inspect'].values
+            for c in ts.columns:
+                if c.startswith('meta_'):
+                    df[c] = ts[c].values
+        return df
 
 
     def return_coordinates(self, polygon):
+        """Centroid (lon, lat) of a GeoJSON feature."""
+        from shapely.geometry import shape
+        c = shape(polygon['geometry']).centroid
+        return c.x, c.y
 
-        # get the localization
-        coordinates = polygon["geometry"]['coordinates'][0]
-        center = np.mean(coordinates, axis = 0) 
-        lon, lat = center
-
-        return lon, lat
     def compute_tilt(self, polygon):
         """
         Computes the tilt of a polygon passed as input using the method
@@ -306,10 +345,11 @@ class MetadataExtraction():
             # Compute surface using the tilt (whether provided or computed)
             surface = self.compute_surface(polygon, tilt)
 
-        # Compute installed capacity using the surface
-        linear_regression = methods.LinearRegression(params=self.params)
-        linear_regression.initialize_coefficients(self.data)
-        installed_capacity = linear_regression.return_installed_capacity(surface)
+        # Compute installed capacity using the surface (coefficients fitted once)
+        if self._regression is None:
+            self._regression = methods.LinearRegression(params=self.params)
+            self._regression.initialize_coefficients(self.data)
+        installed_capacity = self._regression.return_installed_capacity(surface)
 
         return installed_capacity
 

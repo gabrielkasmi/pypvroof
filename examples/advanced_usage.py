@@ -35,7 +35,7 @@ def main():
     polygon = polygons['features'][0]
     
     # Extract characteristics
-    characteristics = extraction.extract_all_characteristics(polygon, save_ext=False)
+    characteristics = extraction.extract_all_characteristics(polygon)
     print("Extracted characteristics:", characteristics)
 
     # example on a look up table in France
@@ -49,7 +49,7 @@ def main():
     )
 
     # Extract characteristics using LUT from file
-    characteristics_from_file = extraction_from_file.extract_all_characteristics(polygon, save_ext=False)
+    characteristics_from_file = extraction_from_file.extract_all_characteristics(polygon)
     print("Characteristics using LUT from file:", characteristics_from_file)
 
 if __name__ == "__main__":

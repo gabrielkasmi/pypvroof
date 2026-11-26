@@ -3,6 +3,7 @@
 # libraries
 import numpy as np
 from area import area
+from shapely.geometry import shape
 
 from . import utils
 
@@ -202,8 +203,8 @@ class LUT():
         """
 
         # compute the center of the polygon
-        coordinates = np.array(polygon['geometry']["coordinates"][0])
-        center = np.mean(coordinates, axis = 0)
+        c = shape(polygon['geometry']).centroid
+        center = (c.x, c.y)
 
         lat_id, lon_id = utils.return_latitude_and_longitude_ids(center, self.latitude_categories, self.longitude_categories)
         surface_id = utils.return_surface_id(surface, self.surface_categories)
@@ -239,42 +240,37 @@ class LUT():
 
 class TheilSen():
     """
-    implements the Theil Sen regressor on a DEM to compute the tilt and azimuth
+    Tilt and azimuth of a single polygon from a DSM, with the Theil-Sen
+    estimator (see pypvroof.theilsen). For many polygons, use
+    pypvroof.characterize_roofs, which processes them concurrently.
+
+    params:
+      - "dsm-service": a DSMService, "ign", or a folder of GeoTIFFs
+        ("raster-folder" is accepted for backward compatibility)
+      - "theil-sen-params": dict of estimator parameters (TheilSenParams)
+      - "crs": CRS of the input polygons (default EPSG:4326)
     """
 
     def __init__(self, params) -> None:
-        """
-        conversion: handles a potential 
-        """
+        from . import dsm
+        spec = params.get('dsm-service') or params.get('raster-folder')
+        if spec is None:
+            raise ValueError("the theil-sen method needs a 'dsm-service' (or 'raster-folder')")
+        self.service = dsm.get_service(spec)
+        self.estimator_params = params.get('theil-sen-params')
+        self.crs = params.get('crs', 'EPSG:4326')
 
-        # optional parameters
-        self.seed = int(params['seed']) if 'seed' in params else 42
-        self.N = int(params['N']) if 'N' in params else 10 
-        self.M = int(params['M']) if 'M' in params else 1000
-        self.offset = int(params['offset']) if 'offset' in params else 25
+    def characterize(self, polygon):
+        """Full result (dict) for a GeoJSON feature / geometry / shapely polygon."""
+        from .bulk import characterize_roofs
+        out = characterize_roofs([polygon], self.service, crs=self.crs,
+                                 params=self.estimator_params, workers=1)
+        return out.iloc[0].to_dict()
 
-        # conversion between the coordinates systems
-        self.conversion = params['conversion'] if "conversion" in params else "epsg:4326,epsg:2154"
-
-        print('conversion file')
-        print(self.conversion)
-
-
-        if 'raster-folder' not in params:
-            raise ValueError("must input a path to the DEM data")
-        self.folder = params['raster-folder']
-    
     def estimate_tilt_and_azimuth(self, polygon):
-        
-        # retrieve the DSM and the pixel coords of the polygon
-        dsm, pixel_coords = utils.extract_dem_from_raster(polygon, self.offset, self.folder, self.conversion)
-
-        # convert the polygon as a mask, in the 
-        # coordinate space of the dsm
-        mask = utils.compute_mask_from_polygon(dsm.shape, pixel_coords)
-
-        # compute the tilt and azimuth
-        return utils.theil_sen_estimator(mask, dsm, M=self.M, N=self.N, random_state=self.seed)
+        """Returns (azimuth, tilt); NaN when the estimation fails."""
+        r = self.characterize(polygon)
+        return r['azimuth'], r['tilt']
 
 class BoudingBox():
     """
