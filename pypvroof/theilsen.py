@@ -6,23 +6,30 @@ elevation grid.
 The method only sees an elevation grid and a mask (see `dsm.DSMPatch`):
 
 1. Many planes are fitted on random subsets of the pixels under the polygon
-   (exact planes through 3 points by default). Subsets drawn on a single roof
-   pan give that pan's plane; subsets mixing pans, chimneys, ground or facade
-   pixels give scattered planes.
+   (exact planes through 3 points by default). The pixels of a subset are
+   drawn close to each other (within `subset_radius`), so that most subsets
+   lie on a single roof pan and give that pan's plane, even on large roofs
+   with many pans; subsets mixing pans, chimneys, ground or facade pixels give
+   scattered planes.
 2. The plane estimates are expressed as gradients (dz/dx, dz/dy). The modes of
    their distribution are the candidate roof planes, refined by the median of
    the estimates around each peak (robust to the scattered ones). Working on
    gradients avoids the circularity of the azimuth and is well defined for
    flat roofs.
-3. Each pixel is assigned to the closest plane (in elevation); each plane is
-   then refitted on its pixels. Planes covering too small a share of the
-   polygon are dropped.
+3. Parallel pans (same orientation, different heights, e.g. the repeated
+   gables of an industrial roof) share a gradient mode: each mode gives one
+   plane per peak of the elevation offsets. Each pixel is assigned to the
+   closest plane (in elevation); each plane is then refitted on its pixels.
+   Planes covering too small a share of the polygon (and less than
+   `min_plane_area`) are dropped.
 4. Decision:
    - one significant plane -> "ok" (or "flat" below `flat_tilt`, azimuth NaN)
    - several planes, but the secondary ones are implausible (too steep), too
      small, or a band along the polygon's edge while the main plane dominates
      -> treated as a misregistration of the polygon (orthophoto vs LiDAR) or
      an obstacle: "ok", with `offset_suspected=True`
+   - several planes with the same orientation (tilt within `same_tilt`,
+     azimuth within `same_azimuth`, e.g. a roof at several heights) -> "ok"
    - otherwise -> "multimodal": tilt / azimuth NaN, `inspect=True`. With
      `split=True` (bulk API), the polygon is split into homogeneous parts.
 
@@ -48,6 +55,7 @@ class TheilSenParams:
     """Parameters of the estimator. Distances in metres, angles in degrees."""
     n_subsets: int = 2000          # number of random subsets
     subset_size: int = 3           # pixels per subset (3 = exact planes)
+    subset_radius: float = 3.0     # max distance (m) between the pixels of a subset
     min_subset_spread: float = 0.5  # min area (m2) covered by a subset (degenerate subsets dropped);
                                     # capped at 5% of the area covered by the pixels
 
@@ -57,12 +65,16 @@ class TheilSenParams:
     erosion: float = 0.5           # polygon erosion before estimation (edges, gutters)
     bandwidth: float = 0.05        # mode width, in gradient units (tan(tilt))
     peak_min_ratio: float = 0.2    # min peak height relative to the highest peak
-    max_modes: int = 4
+    max_modes: int = 4             # gradient modes (orientations)
+    max_planes: int = 16           # planes, counting parallel ones
     search_max_tilt: float = 75.0  # gradients steeper than this are ignored
     inlier_tol: float = 0.15       # max elevation residual (m) to belong to a plane
-    min_mode_share: float = 0.10   # min share of the pixels for a plane to count
+    min_mode_share: float = 0.10   # min share of the pixels for a plane to count...
+    min_plane_area: float = 8.0    # ... unless it covers at least this area (m2), on large polygons
     max_tilt: float = 60.0         # steeper secondary planes are implausible (facades)
     flat_tilt: float = 5.0         # below: flat roof, azimuth undefined
+    same_tilt: float = 5.0         # planes closer than this in tilt (degrees)...
+    same_azimuth: float = 15.0     # ... and azimuth share an orientation (not multimodal)
     min_part_area: float = 3.0     # min area (m2) of a secondary plane / of a split part
     dominant_share: float = 0.75   # share above which the main plane dominates
     edge_band: float = 1.0         # width (m) of the band along the polygon's edge
@@ -89,9 +101,41 @@ def gradient_to_angles(gx, gy):
     return float(tilt), float(azimuth)
 
 
+def _subset_indices(x, y, p, rng):
+    """
+    Indices (M, k) of the pixels of each subset: an anchor drawn at random,
+    and the other pixels drawn among its neighbours (within subset_radius).
+    """
+    from scipy.spatial import cKDTree
+    n, k = len(x), max(3, p.subset_size)
+    anchors = rng.integers(0, n, size=p.n_subsets)
+    pts = np.column_stack([x, y])
+    spacing = np.sqrt(shapely.MultiPoint(pts).convex_hull.area / n) if n > 2 else 1.0
+    # random offsets in the disc, snapped to the nearest pixel; offsets
+    # falling outside the pixel set (beyond half a pixel diagonal) are redrawn
+    idx = np.empty((p.n_subsets, k), dtype=np.int64)
+    idx[:, 0] = anchors
+    tree = cKDTree(pts)
+    for j in range(1, k):
+        todo = np.arange(p.n_subsets)
+        out = np.full(p.n_subsets, -1)
+        for _ in range(6):
+            rad = p.subset_radius * np.sqrt(rng.random(len(todo)))
+            ang = rng.random(len(todo)) * 2 * np.pi
+            q = pts[anchors[todo]] + np.column_stack([rad * np.cos(ang), rad * np.sin(ang)])
+            d, nn = tree.query(q)
+            ok = d <= 0.75 * spacing
+            out[todo[ok]] = nn[ok]
+            todo = todo[~ok]
+            if not len(todo):
+                break
+        out[todo] = rng.integers(0, n, size=len(todo))  # isolated anchors: any pixel
+        idx[:, j] = out
+    return idx
+
+
 def _subset_gradients(x, y, z, p, rng):
-    n = len(z)
-    idx = rng.integers(0, n, size=(p.n_subsets, max(3, p.subset_size)))
+    idx = _subset_indices(x, y, p, rng)
     P = np.stack([x, y, z], axis=1)[idx]  # (M, k, 3)
     if P.shape[1] == 3:
         nrm = np.cross(P[:, 1] - P[:, 0], P[:, 2] - P[:, 0])
@@ -137,15 +181,48 @@ def _find_modes(gx, gy, p):
     return modes
 
 
-def _intercept(r, tol):
-    """Densest value of the residuals r = z - gx x - gy y (robust intercept)."""
+def _intercepts(r, tol, min_ratio, max_n):
+    """
+    Dense values of the residuals r = z - gx x - gy y (robust intercepts): the
+    highest peak, plus the peaks of parallel planes (at least 4 tol apart, and
+    at least `min_ratio` times as high).
+    """
+    step = tol / 3
     lo, hi = np.min(r), np.max(r)
-    nb = int(min(2000, max(1, np.ceil((hi - lo) / (tol / 3)))))
-    h, e = np.histogram(r, bins=nb)
+    nb = int(min(4000, max(1, np.ceil((hi - lo) / step))))
+    step = max(step, (hi - lo) / nb)
+    h, e = np.histogram(r, bins=lo - step + step * np.arange(nb + 3))
     h = np.convolve(h, np.ones(3), mode="same")
-    c0 = (e[np.argmax(h)] + e[np.argmax(h) + 1]) / 2
-    near = np.abs(r - c0) <= tol
-    return float(np.median(r[near])) if near.any() else float(c0)
+    centers = (e[:-1] + e[1:]) / 2
+    size = 2 * int(np.ceil(4 * tol / step)) + 1
+    peaks = np.flatnonzero((h == ndimage.maximum_filter1d(h, size=size, mode="constant")) &
+                           (h >= min_ratio * h.max()) & (h > 0))
+    peaks = sorted(peaks, key=lambda i: -h[i])[:max_n] or [int(np.argmax(h))]
+    out = []
+    for i in peaks:
+        near = np.abs(r - centers[i]) <= tol
+        out.append(float(np.median(r[near])) if near.any() else float(centers[i]))
+    return out
+
+
+def _genuine_parallel(x, y, z, plane, primaries, p):
+    """
+    A parallel plane is kept if its inliers form a surface (not a line of
+    pixels: on a grid, each row of a pan facing elsewhere lines up with any
+    plane) and are not already explained by the main plane of a mode.
+    """
+    gx, gy, c = plane
+    inl = np.abs(z - (gx * x + gy * y + c)) <= p.inlier_tol
+    if inl.sum() < 3:
+        return False
+    explained = np.zeros(inl.sum(), bool)
+    for qx, qy, qc in primaries:
+        explained |= np.abs(z[inl] - (qx * x[inl] + qy * y[inl] + qc)) <= p.inlier_tol
+    if explained.mean() > 0.5:
+        return False
+    xy = np.column_stack([x[inl], y[inl]])
+    width = np.linalg.svd(xy - xy.mean(0), compute_uv=False)[-1] / np.sqrt(inl.sum())
+    return width >= 0.5  # standard deviation (m) across the main direction
 
 
 def _assign(x, y, z, planes, tol):
@@ -176,11 +253,16 @@ def fit_planes(x, y, z, params=None):
     # polygons / fine rasters)
     hull = shapely.MultiPoint(np.column_stack([x, y])).convex_hull.area
     p = replace(p, min_subset_spread=min(p.min_subset_spread, 0.05 * hull))
+    pixel_area = hull / len(z) if len(z) else 1.0
     gx, gy = _subset_gradients(x, y, z, p, rng)
     if len(gx) < 3:
         return [], np.full(len(z), -1)
     modes = _find_modes(gx, gy, p)
-    planes = [(mx, my, _intercept(z - mx * x - my * y, p.inlier_tol)) for mx, my in modes]
+    cands = [[(mx, my, c) for c in _intercepts(z - mx * x - my * y, p.inlier_tol, p.peak_min_ratio, p.max_planes)]
+             for mx, my in modes]
+    primaries = [c[0] for c in cands]
+    planes = primaries + [pl for c in cands for pl in c[1:] if _genuine_parallel(x, y, z, pl, primaries, p)]
+    planes = planes[:p.max_planes]
     if not planes:
         return [], np.full(len(z), -1)
 
@@ -188,7 +270,8 @@ def fit_planes(x, y, z, params=None):
         lab = _assign(x, y, z, planes, p.inlier_tol)
         n = len(z)
         # drop planes with too small a share, refit the others on their pixels
-        keep = [k for k in range(len(planes)) if (lab == k).sum() >= max(3, p.min_mode_share * n)]
+        min_px = max(3, min(p.min_mode_share * n, p.min_plane_area / pixel_area))
+        keep = [k for k in range(len(planes)) if (lab == k).sum() >= min_px]
         if not keep:
             keep = [int(np.bincount(lab[lab >= 0]).argmax())] if (lab >= 0).any() else []
         if not keep:
@@ -279,6 +362,16 @@ def estimate(z, transform, mask, edge_distance=None, params=None, return_labels=
         else:
             multimodal = True
             real_planes.append(k)
+
+    # parallel planes with the same orientation (roof at several heights):
+    # one orientation, measured on the main plane
+    def same(a, b):
+        if a["tilt"] < p.flat_tilt and b["tilt"] < p.flat_tilt:
+            return True
+        daz = abs((a["azimuth"] - b["azimuth"] + 180) % 360 - 180)
+        return abs(a["tilt"] - b["tilt"]) <= p.same_tilt and daz <= p.same_azimuth
+    if multimodal and all(same(primary, planes[k]) for k in real_planes[1:]):
+        multimodal, real_planes = False, [0]
 
     modes = [dict(tilt=m["tilt"], azimuth=m["azimuth"], share=m["share"]) for m in planes]
     common = dict(n_pixels=n, n_modes=len(planes), primary_share=primary["share"],

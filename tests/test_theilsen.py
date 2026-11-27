@@ -66,7 +66,7 @@ def test_gable_is_multimodal_and_splits():
 
     parts = run(func, geom, split=True)
     assert len(parts) == 2
-    assert sorted(round(p[1]["azimuth"]) for p in parts) == [0, 180]
+    assert sorted(round(p[1]["azimuth"]) % 360 for p in parts) == [0, 180]
     assert all(p[1]["tilt"] == pytest.approx(35, abs=0.5) for p in parts)
     # the parts tile the polygon
     union = shapely.union_all([p[0] for p in parts])
@@ -110,3 +110,32 @@ def test_fine_raster_small_polygon():
     assert r["status"] == "ok" and r["tilt"] == pytest.approx(25, abs=1.5)
     [(_, r, _)] = characterize_polygon(rect(X0, Y0, 1.0, 1.0), svc)
     assert r["status"] == "too_few_points"
+
+
+def sawtooth(tilt, period, h=12.0):
+    """Repeated north-south ridges every `period` metres (industrial roof)."""
+    s = np.tan(np.radians(tilt))
+    return lambda x, y: h - s * np.abs(((x - X0) % period) - period / 2)
+
+
+def test_repeated_gables_split_into_each_pan():
+    # 3 ridges, 6 pans facing east / west: subsets mixing pans used to average
+    # into a flat plane
+    geom = rect(X0, Y0, 21, 30)
+    func = sawtooth(20, 7)
+    [(_, r, _)] = run(func, geom, noise=0.03)
+    assert r["status"] == "multimodal"
+    parts = run(func, geom, split=True, noise=0.03)
+    assert len(parts) == 6
+    assert sorted({round(p[1]["azimuth"]) % 360 for p in parts}) == [90, 270]
+    assert all(p[1]["tilt"] == pytest.approx(20, abs=1.5) for p in parts)
+
+
+def test_parallel_planes_same_orientation_are_ok():
+    # same pan orientation at two heights (step of 1.5 m): one orientation
+    s = np.tan(np.radians(25))
+    func = lambda x, y: 10 + s * (y - Y0) + 1.5 * (x - X0 > 6)  # rises northwards: faces south
+    [(_, r, _)] = run(func, rect(X0, Y0, 12, 6), noise=0.02)
+    assert r["status"] == "ok"
+    assert r["tilt"] == pytest.approx(25, abs=1.5)
+    assert round(r["azimuth"]) % 360 == 180
