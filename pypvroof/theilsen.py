@@ -30,9 +30,10 @@ Angles: tilt in degrees from horizontal; azimuth in degrees, 0 = north,
 clockwise (90 = east, 180 = south, 270 = west), direction the plane faces.
 """
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, replace
 
 import numpy as np
+import shapely
 from scipy import ndimage
 
 OK = "ok"
@@ -47,9 +48,12 @@ class TheilSenParams:
     """Parameters of the estimator. Distances in metres, angles in degrees."""
     n_subsets: int = 2000          # number of random subsets
     subset_size: int = 3           # pixels per subset (3 = exact planes)
-    min_subset_spread: float = 0.5  # min area (m2) covered by a subset (degenerate subsets dropped)
+    min_subset_spread: float = 0.5  # min area (m2) covered by a subset (degenerate subsets dropped);
+                                    # capped at 5% of the area covered by the pixels
+
     seed: int = 42
     min_pixels: int = 12           # min valid pixels under the (eroded) polygon
+    min_area: float = 2.0          # min area (m2) of these pixels, whatever the resolution
     erosion: float = 0.5           # polygon erosion before estimation (edges, gutters)
     bandwidth: float = 0.05        # mode width, in gradient units (tan(tilt))
     peak_min_ratio: float = 0.2    # min peak height relative to the highest peak
@@ -168,6 +172,10 @@ def fit_planes(x, y, z, params=None):
     """
     p = TheilSenParams.from_dict(params)
     rng = np.random.default_rng(p.seed)
+    # scale the degeneracy threshold to the extent of the points (small
+    # polygons / fine rasters)
+    hull = shapely.MultiPoint(np.column_stack([x, y])).convex_hull.area
+    p = replace(p, min_subset_spread=min(p.min_subset_spread, 0.05 * hull))
     gx, gy = _subset_gradients(x, y, z, p, rng)
     if len(gx) < 3:
         return [], np.full(len(z), -1)
@@ -235,7 +243,7 @@ def estimate(z, transform, mask, edge_distance=None, params=None, return_labels=
     valid = mask & np.isfinite(z)
     rows, cols = np.nonzero(valid)
     n = len(rows)
-    if n < p.min_pixels:
+    if n < p.min_pixels or n * abs(transform.a * transform.e) < p.min_area:
         r = _nan_result(TOO_FEW_POINTS, n)
         return (r, None) if return_labels else r
 

@@ -35,6 +35,7 @@ setup(
         "geojson>=2.5.0",
     ],
     extras_require={
+        "viz": ["matplotlib>=3.4.0", "pillow"],
         "dev": [
             "pytest>=6.0",
             "black>=21.0",

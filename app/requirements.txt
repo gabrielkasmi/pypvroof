@@ -1,0 +1,2 @@
+pypvroof[viz] @ git+https://github.com/gabrielkasmi/pypvroof@lidar-theilsen-refactor
+gradio>=5,<6

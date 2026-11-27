@@ -32,7 +32,8 @@ pip install -e ".[dev]"
 - [API Documentation](docs/api.md)
 - [Tutorials](docs/tutorials/)
 - [Examples](examples/)
-- [Hands-on Notebook](notebooks/hands-on.ipynb)
+- [Hands-on Notebook](notebooks/hands-on.ipynb): classic methods, LiDAR / MNS Correl / local DSM, visual checks
+- [Demo app](app/) (Gradio, deployable as a Hugging Face Space): `pip install -e ".[viz]" gradio && python app/app.py`
 
 ## Quick Start
 
@@ -97,6 +98,13 @@ e.g. the LiDAR acquisition dates). No fallback is applied: when no value can
 be measured, `status` says why. See [docs/api.md](docs/api.md#dsm-services-and-theil-sen).
 
 Azimuths are in degrees, **0 = north, clockwise** (90 = east, 180 = south).
+
+To check a polygon visually (orthophoto and elevation models, needs the `viz` extra):
+
+```python
+from pypvroof.viz import plot_polygon
+fig = plot_polygon(polygon, services=("ign", "ign-correl"))
+```
 
 ## Repository Structure
 

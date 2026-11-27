@@ -76,10 +76,22 @@ def _masks(geom, patch, p):
     if p.erosion > 0:
         with np.errstate(invalid="ignore"):  # spurious numpy warning in shapely's buffer
             inner = geom.buffer(-p.erosion)
-        if not inner.is_empty and inner.area / (xres * xres) >= p.min_pixels:
+        # keep the erosion only if what remains is still large enough
+        if not inner.is_empty and inner.area >= max(p.min_pixels * xres * xres, p.min_area):
             mask = polygon_mask(inner, patch)
     edge = ndimage.distance_transform_edt(full) * xres
     return full, mask, edge
+
+
+def _polygonal(geom):
+    """Repairs invalid polygons (self-intersections), keeping polygonal parts only."""
+    if geom.is_valid:
+        return geom
+    fixed = shapely.make_valid(geom)
+    if fixed.geom_type == "GeometryCollection":
+        parts = [g for g in fixed.geoms if g.geom_type in ("Polygon", "MultiPolygon")]
+        fixed = shapely.union_all(parts) if parts else geom
+    return fixed
 
 
 def characterize_polygon(geometry, service, params=None, split=False):
@@ -150,6 +162,7 @@ def characterize_roofs(polygons, service="ign", *, crs=None, params=None, split=
     def work(geom):
         if geom is None or geom.is_empty:
             return [(geom, _empty(ERROR), {"error": "empty geometry"})]
+        geom = _polygonal(geom)
         parts = characterize_polygon(reproject(geom, in_crs, service.crs), service, p, split)
         return [(reproject(g, service.crs, in_crs), r, m) for g, r, m in parts]
 

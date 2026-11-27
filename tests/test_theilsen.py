@@ -101,3 +101,12 @@ def test_params_validation():
     with pytest.raises(ValueError):
         TheilSenParams.from_dict({"nope": 1})
     assert TheilSenParams.from_dict({"n_subsets": 10}).n_subsets == 10
+
+
+def test_fine_raster_small_polygon():
+    # 10 cm raster: a small polygon has many pixels but a small extent
+    svc = FunctionService(plane(25, 200), res=0.1, noise=0.01)
+    [(_, r, _)] = characterize_polygon(rect(X0, Y0, 2.5, 2.0), svc)
+    assert r["status"] == "ok" and r["tilt"] == pytest.approx(25, abs=1.5)
+    [(_, r, _)] = characterize_polygon(rect(X0, Y0, 1.0, 1.0), svc)
+    assert r["status"] == "too_few_points"

@@ -111,3 +111,27 @@ def test_bounding_box_azimuth_convention(angle, expected):
     g = affinity.rotate(rect(X0, Y0, 8, 3), angle, origin="center")
     az = azimuth_bounding_box(mapping(lonlat(g)))
     assert any(abs(az - e) <= 1.0 for e in expected), az
+
+
+def test_invalid_and_unclosed_inputs(tmp_path):
+    from shapely.geometry import Polygon
+    # bow-tie (self-intersecting) polygon, and a GeoJSON file with an unclosed ring
+    bowtie = lonlat(Polygon([(X0, Y0), (X0 + 6, Y0 + 4), (X0 + 6, Y0), (X0, Y0 + 4)]))
+    out = characterize_roofs([bowtie], FunctionService(plane(30, 180)), workers=1)
+    assert out.status.iloc[0] in ("ok", "too_few_points")
+    ring = [list(c) for c in lonlat(rect(X0, Y0, 6, 4)).exterior.coords][:-1]  # not closed
+    fc = {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {}, "geometry": {"type": "Polygon", "coordinates": [ring]}}]}
+    path = tmp_path / "unclosed.geojson"
+    path.write_text(json.dumps(fc))
+    out = characterize_roofs(str(path), FunctionService(plane(30, 180)), workers=1)
+    assert out.status.iloc[0] == "ok"
+
+
+def test_plot_polygon_offline():
+    pytest.importorskip("matplotlib")
+    from pypvroof.viz import plot_polygon
+    svc = FunctionService(gable(35, Y0 + 3))
+    fig = plot_polygon(lonlat(rect(X0, Y0, 8, 6)), services=[svc, FunctionService(plane(20, 180))],
+                       ortho=False)
+    assert len(fig.axes) >= 2

@@ -87,6 +87,12 @@ def to_geodataframe(data, crs=None):
                 gdf = gpd.read_parquet(path)
             except ValueError:  # plain parquet with a WKB geometry column
                 return to_geodataframe(pd.read_parquet(path), crs=crs)
+        elif path.lower().endswith((".geojson", ".json")):
+            # read as JSON: tolerant to unclosed rings (written by some tools),
+            # which GDAL refuses
+            import json
+            with open(path) as f:
+                return to_geodataframe(json.load(f), crs=crs)
         else:
             gdf = gpd.read_file(path)
         return gdf if gdf.crs is not None else gdf.set_crs(crs or DEFAULT_CRS)

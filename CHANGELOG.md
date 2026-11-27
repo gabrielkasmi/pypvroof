@@ -15,6 +15,14 @@
 - Bulk API `characterize_roofs`: generic inputs, concurrent processing,
   GeoDataFrame output, optional splitting of multimodal polygons.
 
+- `pypvroof.viz.plot_polygon` (extra `viz`): orthophoto and elevation models
+  under a polygon, with the estimates.
+- Gradio demo (`app/`), deployable as a Hugging Face Space.
+- The hands-on notebook is rewritten for the current API (classic methods,
+  LiDAR HD, MNS Correl, local DSM, splitting, visual checks).
+- GeoJSON files with unclosed rings and self-intersecting polygons are
+  accepted (repaired with `make_valid`).
+
 ### Changed
 - **Azimuth convention: 0 = north, clockwise** (was 0 = south).
 - The `theil-sen` method of `MetadataExtraction` uses the new estimator and a
