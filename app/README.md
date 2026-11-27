@@ -11,8 +11,19 @@ license: mit
 
 # pypvroof demo
 
-Tilt and azimuth of rooftop PV polygons measured on the IGN elevation models
-(LiDAR HD and MNS Correl, 50 cm), with a visual check of each polygon.
+Tilt, azimuth and installed capacity of rooftop PV systems, measured on the
+open surface models (DSM) of European mapping agencies: France, Netherlands,
+Flanders, England, North Rhine-Westphalia, Mecklenburg-Vorpommern, Poland,
+Norway, Switzerland.
+
+- **Draw on the map:** draw a polygon on a roof; the surface model covering the
+  location is queried and the characteristics are computed on the fly. Polygons
+  covering several roof planes are split, and the planes drawn back on the map.
+- **Upload polygons:** GeoJSON, GeoPackage or GeoParquet; results as a table
+  and a GeoJSON to download.
+
+Untick "Extract PV characteristics" to measure roof pans (no installed
+capacity).
 
 Run locally from the repository root:
 
@@ -21,7 +32,7 @@ pip install -e ".[viz]" gradio
 python app/app.py
 ```
 
-To deploy as a Hugging Face Space, copy this folder (with `requirements.txt`)
-to the Space repository. Polygons must be in France (IGN data); the number of
-polygons per run is capped (`PYPVROOF_MAX_POLYGONS`, default 200) to be
-gentle with the Géoplateforme services.
+To deploy as a Hugging Face Space, copy this folder (with `requirements.txt`
+and `examples/`) to the Space repository. The number of polygons per run is
+capped (`PYPVROOF_MAX_POLYGONS`, default 200) to be gentle with the public
+services.

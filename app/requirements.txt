@@ -1,2 +1,2 @@
-pypvroof[viz] @ git+https://github.com/gabrielkasmi/pypvroof@lidar-theilsen-refactor
+pypvroof[viz] @ git+https://github.com/gabrielkasmi/pypvroof@master
 gradio>=5,<6
