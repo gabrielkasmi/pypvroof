@@ -126,7 +126,7 @@ def characterize_polygon(geometry, service, params=None, split=False):
     return [(geometry, _with_surfaces(result, geometry.area), meta)]
 
 
-def characterize_roofs(polygons, service="ign", *, crs=None, params=None, split=False,
+def characterize_roofs(polygons, service="fr-lidar", *, crs=None, params=None, split=False,
                        workers=8, id_column=None, meta_prefix="meta_", progress=None):
     """
     Characterizes the roof planes under a set of polygons.
@@ -136,7 +136,8 @@ def characterize_roofs(polygons, service="ign", *, crs=None, params=None, split=
     polygons : GeoDataFrame, DataFrame with a geometry column, GeoJSON dict,
         list of features / shapely geometries, or a path (GeoJSON, GeoPackage,
         (Geo)Parquet, ...). See geometry.to_geodataframe.
-    service : a DSMService, "ign" (IGN LiDAR HD MNS) or a folder of GeoTIFFs
+    service : a DSMService, a service name from pypvroof.catalog
+              ("fr-lidar", "nl-ahn"...) or a folder of GeoTIFFs
     crs : CRS of the input when it does not carry one (default EPSG:4326)
     params : dict or TheilSenParams, estimator parameters
     split : split multimodal polygons into homogeneous parts

@@ -245,7 +245,7 @@ class TheilSen():
     pypvroof.characterize_roofs, which processes them concurrently.
 
     params:
-      - "dsm-service": a DSMService, "ign", or a folder of GeoTIFFs
+      - "dsm-service": a DSMService, a service name ("fr-lidar", "nl-ahn"...), or a folder of GeoTIFFs
         ("raster-folder" is accepted for backward compatibility)
       - "theil-sen-params": dict of estimator parameters (TheilSenParams)
       - "crs": CRS of the input polygons (default EPSG:4326)

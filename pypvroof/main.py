@@ -105,7 +105,7 @@ class MetadataExtraction():
 
 
         # if tilt or azimuth method is "theil-sen", a DSM service is needed
-        # (params "dsm-service": a DSMService, "ign", or a folder of GeoTIFFs)
+        # (params "dsm-service": a DSMService, a service name ("fr-lidar"...), or a folder of GeoTIFFs)
 
         self._theil_sen = None
         if self._uses_theil_sen():
@@ -132,6 +132,11 @@ class MetadataExtraction():
 
 
         if self.tilt_method == 'lut':
+            import warnings
+            warnings.warn("tilt-method 'lut' is deprecated and will be removed: the look-up table "
+                          "is noisy. Use 'theil-sen' with a surface model (see "
+                          "pypvroof.available_services()) or 'constant'.",
+                          DeprecationWarning, stacklevel=3)
             self.lut_table = self.params.get('lut-table', None)
             # a LUT passed to the constructor (dict or path) takes precedence
             # over the default one

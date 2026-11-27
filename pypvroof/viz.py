@@ -7,7 +7,7 @@ Needs matplotlib and Pillow (`pip install pypvroof[viz]`). The orthophoto is
 the IGN BD ORTHO (France), fetched from the Géoplateforme WMS-R.
 
     from pypvroof.viz import plot_polygon
-    fig = plot_polygon(polygon, services=("ign", "ign-correl"))
+    fig = plot_polygon(polygon, services=("fr-lidar", "fr-correl"))
 """
 
 import io
@@ -45,8 +45,14 @@ def fetch_ortho(bounds, resolution=0.2, layer=ORTHO_LAYER, timeout=60):
 
 
 def _label(service):
-    return {"ign-lidar-hd": "MNS LiDAR HD", "ign-mns-correl": "MNS Correl",
-            "local": "MNS local"}.get(getattr(service, "source", "local"), type(service).__name__)
+    from .catalog import SERVICES
+    src = getattr(service, "source", "local")
+    names = {"ign-lidar-hd": "MNS LiDAR HD", "ign-mns-correl": "MNS Correl", "local": "MNS local"}
+    if src in names:
+        return names[src]
+    if src in SERVICES:
+        return SERVICES[src]["product"]
+    return type(service).__name__
 
 
 def _fmt(r):
@@ -56,15 +62,17 @@ def _fmt(r):
     return r["status"]
 
 
-def plot_polygon(polygon, services=("ign", "ign-correl"), crs=None, margin=6.0, params=None,
-                 ortho=True, figsize_per_panel=(5.0, 4.2)):
+def plot_polygon(polygon, services=("fr-lidar", "fr-correl"), crs=None, margin=6.0, params=None,
+                 ortho=None, figsize_per_panel=(5.0, 4.2)):
     """
     Figure with the orthophoto (if `ortho`) and, below, the elevation grid of
     each service around the polygon, with the estimated tilt / azimuth.
 
     polygon  : a GeoJSON feature / geometry, a shapely polygon, or a one-row
                GeoDataFrame (CRS from `crs`, default EPSG:4326)
-    services : services or specifications ("ign", "ign-correl", a folder...)
+    services : services or specifications ("fr-lidar", "fr-correl", "nl-ahn", a folder...)
+    ortho    : show the IGN orthophoto (France only); by default, when the
+               first service is an IGN one
     """
     import matplotlib.pyplot as plt
     from matplotlib.colors import LinearSegmentedColormap
@@ -73,6 +81,8 @@ def plot_polygon(polygon, services=("ign", "ign-correl"), crs=None, margin=6.0, 
     services = [dsm.get_service(s) for s in services]
     # the panels share the extent of the first service's grid (IGN: Lambert-93)
     target = services[0].crs
+    if ortho is None:
+        ortho = getattr(services[0], "source", "").startswith("ign")
     geom = _polygonal(reproject(gdf.geometry.iloc[0], gdf.crs, target))
 
     panels = []

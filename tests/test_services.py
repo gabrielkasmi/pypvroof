@@ -67,8 +67,8 @@ def test_local_service_nodata(tmp_path):
 
 def test_get_service(tiles):
     assert isinstance(get_service(str(tiles)), LocalRasterService)
-    assert isinstance(get_service("ign"), IGNLidarService)
-    assert isinstance(get_service("ign-correl"), IGNCorrelService)
+    assert isinstance(get_service("fr-lidar"), IGNLidarService)
+    assert isinstance(get_service("fr-correl"), IGNCorrelService)
     with pytest.raises(ValueError):
         get_service("nowhere")
 
