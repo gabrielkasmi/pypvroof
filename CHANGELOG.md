@@ -17,14 +17,39 @@
 
 - `pypvroof.viz.plot_polygon` (extra `viz`): orthophoto and elevation models
   under a polygon, with the estimates.
-- Gradio demo (`app/`), deployable as a Hugging Face Space.
-- The hands-on notebook is rewritten for the current API (classic methods,
-  LiDAR HD, MNS Correl, local DSM, splitting, visual checks).
+- Gradio demo (`app/`), deployable as a Hugging Face Space: draw a polygon on
+  a map (computed on the fly, with the split roof planes drawn back on the map)
+  or upload a file; the surface model is chosen from the location
+  (`catalog.services_at`); national orthophotos as map layers; installed
+  capacity optional ("Extract PV characteristics", off for roof pans).
 - GeoJSON files with unclosed rings and self-intersecting polygons are
   accepted (repaired with `make_valid`).
 
+- README simplified, with a new pipeline diagram (`docs/assets/pipeline.png`,
+  drawn by `docs/make_diagram.py`) and a link to the Hugging Face Space.
+
+- Surface models across Europe: generic `WCSService` (WCS 2.0.1 / 1.0.0) and
+  `STACCogService` (STAC + Cloud-Optimized GeoTIFFs), and a catalogue of
+  presets usable by name (`pypvroof.catalog`, `available_services()`):
+  Netherlands (AHN), Flanders (DHMV II), England (Environment Agency),
+  North Rhine-Westphalia and Mecklenburg-Vorpommern (DOM1), Poland (NMPT),
+  Norway (NHM DOM), Switzerland (swissSURFACE3D).
+- `IGNLidarService` now derives from `RemoteDSMService` (shared HTTP retries,
+  grid snapping, GeoTIFF decoding).
+
+- Continuous integration (GitHub Actions): offline tests on Python 3.9 and
+  3.12; network tests on manual runs.
+- `pyarrow` is now a dependency (parquet inputs).
+
+### Removed
+- The hands-on notebook (superseded by the demo app) and the old flowchart.
+
 ### Changed
 - **Azimuth convention: 0 = north, clockwise** (was 0 = south).
+- Theil-Sen: subsets drawn locally (`subset_radius`) and parallel pans
+  detected, so that large roofs with many pans (repeated gables, sheds) are
+  multimodal and split into each pan, instead of being reported flat. Planes
+  sharing an orientation (roof at several heights) are not multimodal.
 - The `theil-sen` method of `MetadataExtraction` uses the new estimator and a
   DSM service (`dsm-service`; `raster-folder` still accepted). The old
   implementation (8-bit reload of the DSM, resolution assumed to be 2 m) is

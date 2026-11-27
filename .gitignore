@@ -42,6 +42,5 @@ ENV/
 input/
 debug.ipynb
 
-# hands-on data downloaded by the notebook
-notebooks/hands-on/
-notebooks/hands-on.zip
+# local notebooks (hands-on, calibration), not versioned
+notebooks/

@@ -1,169 +1,132 @@
 # PyPVRoof
 
-A Python package for extracting characteristics of rooftop PV installations.
+[![Try it on Hugging Face](https://huggingface.co/datasets/huggingface/badges/resolve/main/open-in-hf-spaces-md.svg)](https://huggingface.co/spaces/TODO/pypvroof)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7586879.svg)](https://doi.org/10.5281/zenodo.7586879)
+
+PyPVRoof extracts the characteristics of rooftop PV systems from geocoded polygons.
+
+- **Outputs:** tilt, azimuth, installed capacity (plus surface and location).
+- **Inputs:** the polygons, and optionally a digital surface model (DSM). Open
+  DSMs of several European countries are queried on the fly (see
+  [Covered countries](#covered-countries)); local GeoTIFFs work too. Without a
+  DSM, heuristics give an estimate from the polygon alone.
+
+<p align="center">
+<img src="docs/assets/pipeline.png" width=900px alt="pypvroof pipeline: PV polygons, a service fetches the surface model under each polygon, Theil-Sen fits the roof plane(s), output characteristics with a status; without a surface model, heuristics from the polygon">
+</p>
+
+**Try it** online on [Hugging Face Spaces](https://huggingface.co/spaces/TODO/pypvroof):
+draw a polygon on a roof anywhere in the covered countries and get its
+characteristics on the fly, or upload a file of polygons. Locally:
+`pip install -e ".[viz]" gradio && python app/app.py`.
+
+## Methods
+
+### Tilt
+
+- **With a DSM:** the elevations under the polygon are fitted with a robust
+  Theil-Sen estimator: planes through random triplets of neighbouring pixels,
+  modes of their slopes (one per orientation, with as many parallel planes as
+  needed), least-squares refit on the inliers. Polygons covering several roof
+  planes with different orientations are flagged `multimodal`, or split into
+  one part per plane (`split=True`): gable roofs, but also large roofs with
+  many pans (repeated gables, sheds).
+- **Without a DSM:** a constant (30° by default, `constant-tilt`).
+
+### Azimuth
+
+- **With a DSM:** from the same Theil-Sen fit. Undefined on flat roofs
+  (`status = "flat"`, tilt under 5°).
+- **Without a DSM:** the orientation of the polygon's minimum rotated
+  rectangle, facing the side closest to south. It gives the axis of the
+  installation only, and can be wrong by 180°.
+
+Azimuths are in degrees, **0 = north, clockwise** (90 = east, 180 = south).
+
+### Installed capacity
+
+The installed capacity (kWp) is proportional to the surface of the panels: the
+projected surface of the polygon divided by the cosine of the tilt. The
+coefficient (`regression-type`) is either a constant (`default-coefficient`,
+1/6.5 kWp/m²), or calibrated on the BDPV registry shipped with the package:
+one coefficient (`linear`) or one per surface class (`clustered`).
+
+## Covered countries
+
+| Country / region | Service | Product | Resolution | CRS | Protocol | Licence |
+|---|---|---|---|---|---|---|
+| France | `fr-lidar` | IGN LiDAR HD | 0.5 m | EPSG:2154 | WMS-R | Etalab 2.0 |
+| France | `fr-correl` | IGN MNS Correl (from aerial images, less precise) | 0.5 m | EPSG:2154 | WMS-R | Etalab 2.0 |
+| Netherlands | `nl-ahn` | AHN | 0.5 m | EPSG:28992 | WCS 2.0.1 | CC0 |
+| Belgium (Flanders) | `be-flanders` | DHMV II (2013-2015) | 1 m | EPSG:31370 | WCS 2.0.1 | Modellicentie gratis hergebruik |
+| United Kingdom (England) | `uk-england` | Environment Agency LiDAR composite DSM | 1 m | EPSG:27700 | WCS 2.0.1 | OGL v3 |
+| Germany (North Rhine-Westphalia) | `de-nw` | DOM1 | 1 m | EPSG:25832 | WCS 2.0.1 | dl-de/zero-2-0 |
+| Germany (Mecklenburg-Vorpommern) | `de-mv` | DOM1 | 1 m | EPSG:25833 | WCS 2.0.1 | CC BY 4.0 |
+| Poland | `pl` | GUGiK NMPT (slow, ~7 s per polygon) | 0.5 m | EPSG:2180 | WCS 1.0.0 | GUGiK |
+| Norway | `no` | Nasjonal høydemodell DOM | 1 m | EPSG:25833 | WCS 1.0.0 | CC BY 4.0 |
+| Switzerland | `ch-swisssurface3d` | swisstopo swissSURFACE3D | 0.5 m | EPSG:2056 | STAC + COG | swisstopo OGD |
+| Anywhere | path to a folder | your GeoTIFFs (pixel = elevation in metres) | any | any projected | local files | yours |
+
+Polygons can be given in any CRS. At 1 m, polygons under about 12 m² have too
+few pixels to be measured. `pypvroof.available_services()` returns this table.
 
 ## Installation
-
-### Basic Installation
-
-You can install the package using pip:
 
 ```bash
 pip install pypvroof
 ```
 
-GDAL is no longer required: rasters are read with `rasterio`, whose wheels ship their own GDAL.
+From source: `git clone https://github.com/gabrielkasmi/pypvroof.git && cd pypvroof && pip install -e ".[dev]"`. Python >= 3.9.
 
-### Installation from Source
+## Usage
 
-```bash
-git clone https://github.com/gabrielkasmi/pypvroof.git
-cd pypvroof
-pip install -e ".[dev]"
-```
-
-## System Requirements
-
-- Python >= 3.9
-- Core dependencies are automatically installed
-
-## Documentation
-
-- [API Documentation](docs/api.md)
-- [Tutorials](docs/tutorials/)
-- [Examples](examples/)
-- [Hands-on Notebook](notebooks/hands-on.ipynb): classic methods, LiDAR / MNS Correl / local DSM, visual checks
-- [Demo app](app/) (Gradio, deployable as a Hugging Face Space): `pip install -e ".[viz]" gradio && python app/app.py`
-
-## Quick Start
-
-The supplementary data is accessible on our Zenodo repository: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7586879.svg)](https://doi.org/10.5281/zenodo.7586879)
+Tilt and azimuth measured on a DSM, for a whole file:
 
 ```python
-import geojson
+from pypvroof import characterize_roofs
+
+out = characterize_roofs("detections.geojson", "fr-lidar", workers=8)
+```
+
+The input can be a GeoDataFrame, a GeoJSON, a parquet file, a list of shapely
+polygons... The output is a GeoDataFrame with `tilt`, `azimuth`, `surface`, a
+`status` (`ok`, `flat`, `multimodal`, `no_coverage`, `too_few_points`...) and
+the service metadata (`meta_*`, e.g. the LiDAR acquisition date). No fallback
+is applied: when a value cannot be measured, `status` says why and you choose
+what to do (another service, the heuristics...).
+
+All characteristics, including the installed capacity:
+
+```python
 from pypvroof import MetadataExtraction
 
-
-# load the data 
-index =1356
-arrays=geojson.load(open("path/to/geojson/with/arrays"))
-case=arrays['features'][index]
-
-
-# Example parameters dictionary
-# choose your own methods
 params = {
-    "azimuth-method": "bounding-box", # choose between bounding-box and theil-sen
-    "tilt-method": "lut", # choose between constant, lut and theil-sen
-#    "dsm-service": "ign", # DSM used by theil-sen: "ign" (IGN LiDAR HD), a folder of GeoTIFFs, or a DSMService
-    "regression-type": "linear", # choose between constant, linear or clustered
-#    "constant-tilt": 30, # default parameters if no lookup table of DEM
-#    "default-coefficient": 1/(6.5) # default parameter if no data to calibrate the linear regression coefficients
+    "tilt-method": "theil-sen",      # or "constant"
+    "azimuth-method": "theil-sen",   # or "bounding-box"
+    "dsm-service": "fr-lidar",            # a service from the table, or a folder of GeoTIFFs
+    "regression-type": "linear",     # or "constant", "clustered"
 }
-
-# initialize the object for extracting the metadata
-extractor = MetadataExtraction(p=params)
-
-# extract all characteristics at once for a single polygon
-characteristics = extractor.extract_all_characteristics(case)
-
-
-# or if you want a dataframe with all the characteristics for multiple polygons
-
-dataframe = extractor.extract_all_characteristics(arrays)
+df = MetadataExtraction(p=params).extract_all_characteristics("detections.geojson")
 ```
 
-### Tilt and azimuth from LiDAR (Theil-Sen)
-
-The tilt and azimuth of the roof plane under each polygon can be measured on a
-digital surface model (DSM). In France, the IGN LiDAR HD surface model (50 cm)
-is queried on the fly, one small request per polygon (the IGN "MNS Correl",
-derived from the BD ORTHO images, is also available as a less precise
-alternative covering areas without LiDAR: `IGNCorrelService`):
-
-```python
-from pypvroof import characterize_roofs, IGNLidarService, LocalRasterService
-
-out = characterize_roofs("detections.parquet", IGNLidarService(), workers=8)
-# or, on local rasters:
-out = characterize_roofs(arrays, LocalRasterService("path/to/dsm_tiles"), split=True)
-```
-
-The input can be a GeoDataFrame, a GeoJSON FeatureCollection, a list of
-features or shapely polygons, or a file path. The output is a GeoDataFrame
-with one row per polygon (several if `split=True` and the polygon covers
-several roof planes), the columns `tilt`, `azimuth`, `status`, `inspect`,
-`surface_proj`, `surface`, diagnostics, and the service metadata (`meta_*`,
-e.g. the LiDAR acquisition dates). No fallback is applied: when no value can
-be measured, `status` says why. See [docs/api.md](docs/api.md#dsm-services-and-theil-sen).
-
-Azimuths are in degrees, **0 = north, clockwise** (90 = east, 180 = south).
-
-To check a polygon visually (orthophoto and elevation models, needs the `viz` extra):
+Visual check of a polygon (orthophoto and DSMs, `pip install "pypvroof[viz]"`):
 
 ```python
 from pypvroof.viz import plot_polygon
-fig = plot_polygon(polygon, services=("ign", "ign-correl"))
+fig = plot_polygon(polygon, services=("fr-lidar", "fr-correl"))
 ```
 
-## Repository Structure
+See the [API documentation](docs/api.md) for all parameters and statuses.
 
-```
-pypvroof/
-├── src/                    # Package source code
-├── examples/              # Example scripts
-│   ├── basic_usage.py
-│   └── advanced_usage.py
-├── notebooks/            # Jupyter notebooks
-│   ├── hands-on.ipynb
-│   └── advanced_features.ipynb
-├── docs/                # Additional documentation
-│   ├── api.md
-│   └── tutorials/
-├── tests/              # Test suite
-├── setup.py
-├── README.md
-└── LICENSE
-```
+## Contributing: add a service
 
-## Features
-
-- Extract PV roof characteristics from GeoJSON polygons (or any geo table)
-- Tilt and azimuth measured on LiDAR / DSM data (IGN LiDAR HD or local GeoTIFFs), in bulk
-- Support for multiple computation methods
-- Custom lookup table support
-- Flexible parameter configuration
-
-
-The package is shipped with the lookup table for France used in [3] (to be replaced by a model trained on LiDAR measurements) and array metadata from BDPV database and with a dataset of PV systems characteristics coming from BDPV if you want to use the linear regression for deriving the installed capacity of the system. 
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Overview and motivation
-
-PyPVRoof is an all-in-one approach for extracting metadata of rooftop PV installations. The approach is modular, depending on the data available, we use different methods to extract these characteristics. The user only has to set his preferred parameters depending on the data available and the module will automatically proceed a single polygon or a complete `.geojson` file. We extract the following characteristics:
-
-* Localization (latitude, longitude)
-* Tilt angle
-* Azimuth angle
-* Surface
-* Installed capacity
-
-These characteristics can be deduced from overhead imagery and some additional data (a PV registry or surface models). Besides, these characteristics are sufficient for a broad range of application, e.g. surveying [1](https://arxiv.org/abs/2009.05738) or regional PV estimation [2](https://www.sciencedirect.com/science/article/abs/pii/S0038092X18308211)
-
-This software offers practitionners a fast and efficient way to extract installations metadata to generate consistent registries. This work expands and completes the characteristics extraction module of [3](https://arxiv.org/abs/2207.07466). 
-
-The flowchart of the package is summarized below:
-
-<p align="center">
-<img src="assets/flowchart.png" width=700px>
-</p>
+Your country is not in the table? Most national LiDAR surface models are
+published as an OGC WCS (or STAC + Cloud-Optimized GeoTIFFs), and adding one
+is usually a single entry in [`pypvroof/catalog.py`](pypvroof/catalog.py).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the step-by-step guide, then open a
+pull request.
 
 ## Citation
-
-If you wish to use this work, please cite us as: 
 
 ```
 @article{tremenbert2023pypvroof,
@@ -174,12 +137,9 @@ If you wish to use this work, please cite us as:
 }
 ```
 
-Like this work ? Do not hesitate to <a class="github-button" href="https://github.com/gabrielkasmi/pypvroof" data-icon="octicon-star" aria-label="Star gabrielkasmi/pypvroof on GitHub">star</a> us !
+PyPVRoof expands the characteristics extraction module of [Kasmi et al. (2022)](https://arxiv.org/abs/2207.07466).
 
-## References
+## License
 
-[1] De Jong, T., Bromuri, S., Chang, X., Debusschere, M., Rosenski, N., Schartner, C., ... & Curier, L. (2020). Monitoring spatial sustainable development: semi-automated analysis of satellite and aerial images for energy transition and sustainability indicators. arXiv preprint arXiv:2009.05738.
-
-[2] Killinger, S., Lingfors, D., Saint-Drenan, Y. M., Moraitis, P., van Sark, W., Taylor, J., ... & Bright, J. M. (2018). On the search for representative characteristics of PV systems: Data collection and analysis of PV system azimuth, tilt, capacity, yield and shading. Solar Energy, 173, 1087-1106.
-
-[3] Kasmi, G., Dubus, L., Blanc, P., & Saint-Drenan, Y. M. (2022, September). Towards unsupervised assessment with open-source data of the accuracy of deep learning-based distributed PV mapping. In Workshop on Machine Learning for Earth Observation (MACLEAN), in Conjunction with the ECML/PKDD 2022.
+MIT, see [LICENSE](LICENSE). The surface models belong to their producers and
+are used under their licences (see the table above).

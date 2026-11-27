@@ -9,17 +9,15 @@ The main class for extracting PV roof characteristics.
 ```python
 from pypvroof import MetadataExtraction
 
-# Basic initialization with default LUT-France
 extraction = MetadataExtraction(p=params)
-
-# With custom LUT
-extraction = MetadataExtraction(p=params, lut=custom_lut)
 ```
 
 #### Parameters
 
 - `p` (dict): Dictionary of parameters for the extraction process
-- `lut` (str or dict, optional): Path to a custom lookup table JSON file or a dictionary containing the lookup table. If None, the default LUT-France will be used.
+- `lut` (str or dict, optional, **deprecated**): custom look-up table for
+  `tilt-method: "lut"`. The look-up table is deprecated (noisy, France only)
+  and will be removed; use `"theil-sen"` with a surface model, or `"constant"`.
 
 ### Methods
 
@@ -111,12 +109,12 @@ south (it cannot tell which side of the rectangle the panels face).
 
 ```python
 from pypvroof import characterize_roofs
-out = characterize_roofs(polygons, service="ign", crs=None, params=None, split=False,
+out = characterize_roofs(polygons, service="fr-lidar", crs=None, params=None, split=False,
                          workers=8, id_column=None, meta_prefix="meta_", progress=None)
 ```
 
 - `polygons`: GeoDataFrame / GeoSeries, DataFrame with a `geometry` column (shapely or WKB), GeoJSON dict, list of features or shapely geometries, or a path (GeoJSON, GeoPackage, (Geo)Parquet, ...)
-- `service`: a `DSMService`, `"ign"` (LiDAR HD), `"ign-correl"` (MNS Correl), or a folder of GeoTIFFs
+- `service`: a `DSMService`, `"fr-lidar"` (LiDAR HD), `"fr-correl"` (MNS Correl), or a folder of GeoTIFFs
 - `params`: dict or `TheilSenParams` (see below)
 - `split`: split polygons covering several roof planes into homogeneous parts
 - `workers`: polygons processed concurrently (threads). Mind the usage limits of remote services.
@@ -149,7 +147,7 @@ Statuses:
 | `error` | unexpected exception (see `meta_error`) |
 
 pypvroof never applies a fallback: deciding what to do with a status (use a
-LUT / model, retry, inspect, check the building existed at the LiDAR
+another service, heuristics, retry, inspect, check the building existed at the LiDAR
 acquisition date from `meta_date_fin_acquisition`...) is up to the caller.
 
 ### Services
@@ -170,8 +168,7 @@ IGN "MNS Correl" (50 cm), computed by correlation of the BD ORTHO aerial
 images, through the same WMS-R. It covers areas without LiDAR HD and is
 consistent with detections made on the BD ORTHO (same images, same date), but
 it is less precise. On 1,000 random detections where both were available:
-tilt within 5° of LiDAR for 56% of them (mean absolute difference 6.6°, vs
-9.7° for the LUT), azimuth within 15° for 87%. `meta`: `source`, `product`
+tilt within 5° of LiDAR for 56% of them (mean absolute difference 6.6°), azimuth within 15° for 87%. `meta`: `source`, `product`
 (no acquisition metadata index).
 
 **`LocalRasterService(folder, pattern="*.tif", margin=1.0, crs=None)`**:
@@ -182,7 +179,44 @@ IGN products). Any file name; the folder is indexed by extent; all rasters
 must share the same CRS; polygons spanning several rasters are handled.
 `meta`: `source`, `files`, `tags` (GeoTIFF tags of the first raster).
 
-Custom services subclass `DSMService`, set `crs` and implement `fetch(geometry)`.
+**`WCSService(url, coverage, crs, resolution, grid_origin=0, version="2.0.1", axis_labels=("x", "y"), format="image/tiff", source=None, attribution=None, margin=1.0, ...)`**:
+any surface model served by an OGC WCS (2.0.1 or 1.0.0) returning GeoTIFFs
+(multipart WCS responses are handled). `meta`: `source`, `coverage`, `attribution`.
+
+**`STACCogService(stac_url, collection, crs, asset_filter, tile_size=1000, latest=True, ...)`**:
+surface models published as Cloud-Optimized GeoTIFF tiles indexed by a STAC
+API; only the window under the polygon is read. When several acquisitions
+cover a tile, the latest is used. `meta`: `source`, `attribution`, `items`, `datetime`.
+
+**Catalogue** (`pypvroof.catalog`): ready-made presets, usable by name
+everywhere a service is expected (`characterize_roofs(polys, "nl-ahn")`,
+`"dsm-service": "uk-england"`, `plot_polygon(..., services=("de-nw",))`).
+`available_services()` returns the table below with CRS and licences. Each
+entry was checked on live requests (see `tests/test_catalog.py`, run with
+`PYPVROOF_NETWORK_TESTS=1`).
+
+| Name | Region | Product | Resolution | CRS | Protocol |
+|---|---|---|---|---|---|
+| `fr-lidar` | France | IGN LiDAR HD MNS | 0.5 m | EPSG:2154 | WMS-R |
+| `fr-correl` | France | IGN MNS Correl | 0.5 m | EPSG:2154 | WMS-R |
+| `nl-ahn` | Netherlands | AHN DSM (PDOK) | 0.5 m | EPSG:28992 | WCS 2.0.1 |
+| `be-flanders` | Belgium (Flanders) | DHMV II DSM (2013-2015) | 1 m | EPSG:31370 | WCS 2.0.1 (multipart) |
+| `uk-england` | England | Environment Agency LiDAR composite DSM (first return) | 1 m | EPSG:27700 | WCS 2.0.1 |
+| `de-nw` | Germany (NRW) | DOM1 | 1 m | EPSG:25832 | WCS 2.0.1 |
+| `de-mv` | Germany (M-V) | DOM1 | 1 m | EPSG:25833 | WCS 2.0.1 |
+| `pl` | Poland | GUGiK NMPT | 0.5 m | EPSG:2180 | WCS 1.0.0 (~7 s per request) |
+| `no` | Norway | Nasjonal høydemodell DOM | 1 m | EPSG:25833 | WCS 1.0.0 |
+| `ch-swisssurface3d` | Switzerland | swissSURFACE3D Raster | 0.5 m | EPSG:2056 | STAC + COG |
+
+Not included (checked in November 2026): Denmark (Danmarks Højdemodel needs a
+Dataforsyningen token: usable with `WCSService(..., extra_params={"token": ...})`),
+Wallonia (rendered maps only, no elevation values), Czech Republic (DMP 1G,
+2 m from a TIN), Spain (5 m surface model only), Sachsen-Anhalt (WCS
+returning errors).
+
+To add a region, add an entry to `pypvroof/catalog.py` with a test point on a
+building. Fully custom services subclass `DSMService`, set `crs` and implement
+`fetch(geometry)`.
 
 ### TheilSenParams
 
@@ -196,7 +230,11 @@ misregistration or an obstacle (`offset_suspected=True`); otherwise the
 polygon is `multimodal`.
 
 Main parameters (defaults): `n_subsets=2000`, `subset_size=3`,
-`min_pixels=12`, `erosion=0.5` m, `bandwidth=0.05` (gradient units),
-`inlier_tol=0.15` m, `min_mode_share=0.1`, `max_tilt=60`, `flat_tilt=5`,
+`subset_radius=3` m (pixels of a subset drawn within this distance, so that
+subsets stay on one pan), `min_pixels=12`, `erosion=0.5` m, `bandwidth=0.05`
+(gradient units), `inlier_tol=0.15` m, `min_mode_share=0.1` (or
+`min_plane_area=8` m² on large polygons), `max_planes=16` (parallel pans
+included), `same_tilt=5` and `same_azimuth=15` (planes with the same
+orientation are not multimodal), `max_tilt=60`, `flat_tilt=5`,
 `min_part_area=3` m², `dominant_share=0.75`, `edge_band=1` m,
 `edge_frac=0.8`, `seed=42`. See `pypvroof/theilsen.py`.
