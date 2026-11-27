@@ -1,0 +1,60 @@
+# Keeps the Hugging Face Space (the demo) in sync with master:
+# - app/ changed: its content is uploaded to the Space, which rebuilds;
+# - the package changed: the Space is rebuilt from scratch (factory reboot), so
+#   that it reinstalls pypvroof from master (app/requirements.txt); a normal
+#   rebuild would reuse the cached install.
+# Needs a Hugging Face token with write access to the Space, stored as the
+# repository secret HF_TOKEN.
+name: sync space
+
+on:
+  push:
+    branches: [master]
+    paths: ["app/**", "pypvroof/**", "setup.py"]
+  workflow_dispatch:
+
+env:
+  SPACE: gabrielkasmi/pypvroof
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install huggingface_hub
+      - name: What changed
+        id: changes
+        run: |
+          before="${{ github.event.before }}"
+          if [ "${{ github.event_name }}" != "push" ] || ! git cat-file -e "$before" 2>/dev/null; then
+            echo "app=true" >> "$GITHUB_OUTPUT"; echo "package=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          files=$(git diff --name-only "$before" "${{ github.sha }}")
+          echo "$files"
+          echo "app=$(echo "$files" | grep -q '^app/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "package=$(echo "$files" | grep -qE '^(pypvroof/|setup.py)' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Upload app/ to the Space
+        if: steps.changes.outputs.app == 'true'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python - <<'EOF'
+          import os
+          from huggingface_hub import upload_folder
+          upload_folder(repo_id=os.environ["SPACE"], repo_type="space", folder_path="app",
+                        commit_message="Sync from GitHub ${{ github.sha }}",
+                        # files removed from app/ are removed from the Space too
+                        # (the Space's .gitattributes is kept)
+                        delete_patterns=["*.py", "*.txt", "*.md", "examples/**"])
+          EOF
+      - name: Rebuild the Space (new package version)
+        if: steps.changes.outputs.package == 'true'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python -c "import os; from huggingface_hub import restart_space; restart_space(os.environ['SPACE'], factory_reboot=True)"
