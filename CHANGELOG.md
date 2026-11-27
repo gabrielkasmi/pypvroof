@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 (2026-11-27)
+
+- Licence: the LICENSE file now holds the MIT licence, as declared in the
+  package metadata (it still held the GPL v3 text in 0.2.0).
+
 ## 0.2.0 (2026-11-27)
 
 ### Added

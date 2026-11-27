@@ -2,7 +2,7 @@
 pypvroof - A Python package for PV roof mapping and analysis
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 from .main import MetadataExtraction
 from .dsm import (DSMService, DSMPatch, FetchResult, IGNLidarService, IGNCorrelService, LocalRasterService,
