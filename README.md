@@ -76,7 +76,9 @@ dataframe = extractor.extract_all_characteristics(arrays)
 
 The tilt and azimuth of the roof plane under each polygon can be measured on a
 digital surface model (DSM). In France, the IGN LiDAR HD surface model (50 cm)
-is queried on the fly, one small request per polygon:
+is queried on the fly, one small request per polygon (the IGN "MNS Correl",
+derived from the BD ORTHO images, is also available as a less precise
+alternative covering areas without LiDAR: `IGNCorrelService`):
 
 ```python
 from pypvroof import characterize_roofs, IGNLidarService, LocalRasterService

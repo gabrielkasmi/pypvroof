@@ -9,6 +9,7 @@
   statuses (`ok`, `flat`, `multimodal`, ...) and diagnostics.
 - DSM services (`pypvroof.dsm`): `IGNLidarService` (IGN LiDAR HD through the
   Géoplateforme WMS-R, acquisition metadata from the WFS index) and
+  `IGNCorrelService` (IGN MNS Correl, derived from the BD ORTHO images) and
   `LocalRasterService` (folder of GeoTIFFs). Services return free-form
   metadata that is passed through to the output.
 - Bulk API `characterize_roofs`: generic inputs, concurrent processing,

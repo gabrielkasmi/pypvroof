@@ -6,7 +6,7 @@ import pytest
 import rasterio
 from rasterio.transform import from_origin
 
-from pypvroof import IGNLidarService, LocalRasterService, characterize_roofs
+from pypvroof import IGNCorrelService, IGNLidarService, LocalRasterService, characterize_roofs
 from pypvroof.dsm import get_service
 from synthetic import X0, Y0, plane, rect
 
@@ -68,6 +68,7 @@ def test_local_service_nodata(tmp_path):
 def test_get_service(tiles):
     assert isinstance(get_service(str(tiles)), LocalRasterService)
     assert isinstance(get_service("ign"), IGNLidarService)
+    assert isinstance(get_service("ign-correl"), IGNCorrelService)
     with pytest.raises(ValueError):
         get_service("nowhere")
 
@@ -92,3 +93,12 @@ def test_ign_service_paris():
 def test_ign_service_no_coverage():
     fr = IGNLidarService().fetch(rect(100000, 6800000, 10, 10))  # Atlantic
     assert fr.status == "no_coverage"
+
+
+@network
+def test_ign_correl_covers_areas_without_lidar():
+    # Lille: no LiDAR HD MNS yet, but MNS Correl is available
+    assert IGNLidarService(fetch_metadata=False).fetch(rect(704000, 7059000, 10, 10)).status == "no_coverage"
+    fr = IGNCorrelService().fetch(rect(704000, 7059000, 10, 10))
+    assert fr.status == "ok" and fr.meta["source"] == "ign-mns-correl"
+    assert fr.patch.resolution == (0.5, 0.5)

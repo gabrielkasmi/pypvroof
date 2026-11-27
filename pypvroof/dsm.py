@@ -137,6 +137,7 @@ class IGNLidarService(DSMService):
                      "code_mission", "coordonnees_nw")
 
     crs = CRS.from_epsg(2154)
+    source = "ign-lidar-hd"
 
     def __init__(self, product="MNS", margin=1.0, resolution=0.5, grid_origin=0.25,
                  timeout=30, retries=3, backoff=1.0, fetch_metadata=True,
@@ -215,7 +216,7 @@ class IGNLidarService(DSMService):
     # -- fetch ------------------------------------------------------------------
 
     def fetch(self, geometry):
-        meta = {"source": "ign-lidar-hd", "product": self.product}
+        meta = {"source": self.source, "product": self.product}
         minx, miny, maxx, maxy = geometry.bounds
         res = self.resolution
         minx, maxx = _snap(minx - self.margin, maxx + self.margin, res, self.grid_origin)
@@ -248,6 +249,32 @@ class IGNLidarService(DSMService):
         if not np.isfinite(z).any():
             return FetchResult(NO_COVERAGE, None, meta)
         return FetchResult(OK, patch, meta)
+
+
+class IGNCorrelService(IGNLidarService):
+    """
+    IGN "MNS Correl" surface model (50 cm), served by the Géoplateforme WMS-R.
+
+    It is computed by correlation of the aerial images of the BD ORTHO, i.e.
+    from the same images as the orthophotos: it is consistent in time and
+    geometry with detections made on the BD ORTHO, and covers areas without
+    LiDAR HD. Correlation is less precise than LiDAR, especially on low-texture
+    surfaces (dark panels, uniform roofs) and near roof edges.
+
+    Same parameters as IGNLidarService, without `product`; there is no
+    acquisition metadata index (`fetch_metadata` is ignored).
+    `meta` keys: source ("ign-mns-correl"), product.
+    """
+
+    source = "ign-mns-correl"
+
+    def __init__(self, margin=1.0, resolution=0.5, grid_origin=0.25, timeout=30,
+                 retries=3, backoff=1.0, fetch_metadata=False, user_agent=None):
+        super().__init__("MNS", margin=margin, resolution=resolution, grid_origin=grid_origin,
+                         timeout=timeout, retries=retries, backoff=backoff,
+                         fetch_metadata=False, user_agent=user_agent)
+        self.product = "MNS-CORREL"
+        self.layer = "ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES.MNS"
 
 
 class LocalRasterService(DSMService):
@@ -332,12 +359,15 @@ def get_service(spec, **kwargs):
     Builds a service from a specification:
       - a DSMService instance (returned as is)
       - "ign" / "ign-lidar-hd" -> IGNLidarService(**kwargs)
+      - "ign-correl" / "mns-correl" -> IGNCorrelService(**kwargs)
       - a path to a folder -> LocalRasterService(folder, **kwargs)
     """
     if isinstance(spec, DSMService):
         return spec
     if isinstance(spec, str) and spec.lower() in ("ign", "ign-lidar-hd", "lidar"):
         return IGNLidarService(**kwargs)
+    if isinstance(spec, str) and spec.lower() in ("ign-correl", "mns-correl", "correl"):
+        return IGNCorrelService(**kwargs)
     if isinstance(spec, (str, os.PathLike)) and os.path.isdir(spec):
         return LocalRasterService(spec, **kwargs)
     raise ValueError("unknown DSM service: {!r}".format(spec))

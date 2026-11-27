@@ -116,7 +116,7 @@ out = characterize_roofs(polygons, service="ign", crs=None, params=None, split=F
 ```
 
 - `polygons`: GeoDataFrame / GeoSeries, DataFrame with a `geometry` column (shapely or WKB), GeoJSON dict, list of features or shapely geometries, or a path (GeoJSON, GeoPackage, (Geo)Parquet, ...)
-- `service`: a `DSMService`, `"ign"`, or a folder of GeoTIFFs
+- `service`: a `DSMService`, `"ign"` (LiDAR HD), `"ign-correl"` (MNS Correl), or a folder of GeoTIFFs
 - `params`: dict or `TheilSenParams` (see below)
 - `split`: split polygons covering several roof planes into homogeneous parts
 - `workers`: polygons processed concurrently (threads). Mind the usage limits of remote services.
@@ -164,6 +164,15 @@ GeoTIFFs at the native 50 cm grid. `meta`: `source`, `product`, and the
 acquisition metadata of the LiDAR tile from the WFS index (`tile`,
 `date_debut_acquisition`, `date_fin_acquisition`, `date_edition`,
 `code_mission`), cached per 1 km tile.
+
+**`IGNCorrelService(margin=1.0, timeout=30, retries=3, backoff=1.0)`**:
+IGN "MNS Correl" (50 cm), computed by correlation of the BD ORTHO aerial
+images, through the same WMS-R. It covers areas without LiDAR HD and is
+consistent with detections made on the BD ORTHO (same images, same date), but
+it is less precise. On 1,000 random detections where both were available:
+tilt within 5° of LiDAR for 56% of them (mean absolute difference 6.6°, vs
+9.7° for the LUT), azimuth within 15° for 87%. `meta`: `source`, `product`
+(no acquisition metadata index).
 
 **`LocalRasterService(folder, pattern="*.tif", margin=1.0, crs=None)`**:
 local rasters. Expected format: single-band GeoTIFFs whose pixel values are
