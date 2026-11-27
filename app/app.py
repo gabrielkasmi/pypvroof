@@ -544,5 +544,17 @@ with gr.Blocks(title="PyPVRoof", theme=THEME, head=HEAD, css=CSS) as demo:
         gr.Markdown(covered_areas())
     demo.load(None, None, None, js=MAP_JS)
 
+# Hugging Face ZeroGPU hardware (the only free Space hardware) refuses to start
+# an app without a @spaces.GPU function. The demo needs no GPU: this function
+# is never called, it only satisfies the startup check.
+try:
+    import spaces
+
+    @spaces.GPU
+    def _zerogpu_placeholder():
+        pass
+except ImportError:  # not on a Space
+    pass
+
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(ssr_mode=False)  # the map is injected by JavaScript on page load
