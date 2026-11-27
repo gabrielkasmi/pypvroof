@@ -1,6 +1,6 @@
 # PyPVRoof
 
-[![Try it on Hugging Face](https://huggingface.co/datasets/huggingface/badges/resolve/main/open-in-hf-spaces-md.svg)](https://huggingface.co/spaces/TODO/pypvroof)
+[![Try it on Hugging Face](https://huggingface.co/datasets/huggingface/badges/resolve/main/open-in-hf-spaces-md.svg)](https://huggingface.co/spaces/gabrielkasmi/pypvroof)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7586879.svg)](https://doi.org/10.5281/zenodo.7586879)
 
 PyPVRoof extracts the characteristics of rooftop PV systems from geocoded polygons.
@@ -15,7 +15,7 @@ PyPVRoof extracts the characteristics of rooftop PV systems from geocoded polygo
 <img src="docs/assets/pipeline.png" width=900px alt="pypvroof pipeline: PV polygons, a service fetches the surface model under each polygon, Theil-Sen fits the roof plane(s), output characteristics with a status; without a surface model, heuristics from the polygon">
 </p>
 
-**Try it** online on [Hugging Face Spaces](https://huggingface.co/spaces/TODO/pypvroof):
+**Try it** online on [Hugging Face Spaces](https://huggingface.co/spaces/gabrielkasmi/pypvroof):
 draw a polygon on a roof anywhere in the covered countries and get its
 characteristics on the fly, or upload a file of polygons. Locally:
 `pip install -e ".[viz]" gradio && python app/app.py`.
@@ -76,7 +76,7 @@ few pixels to be measured. `pypvroof.available_services()` returns this table.
 pip install pypvroof
 ```
 
-From source: `git clone https://github.com/gabrielkasmi/pypvroof.git && cd pypvroof && pip install -e ".[dev]"`. Python >= 3.9.
+From source: `git clone https://github.com/gabrielkasmi/pypvroof.git && cd pypvroof && pip install -e ".[dev]"`. Python >= 3.10.
 
 ## Usage
 

@@ -1,12 +1,15 @@
 ---
-title: pypvroof
+title: PyPVRoof
 emoji: ☀️
-colorFrom: blue
-colorTo: yellow
+colorFrom: yellow
+colorTo: blue
 sdk: gradio
+sdk_version: 5.50.0
+python_version: '3.12'
 app_file: app.py
 pinned: false
 license: mit
+short_description: Estimate tilt, azimuth and installed capacities on-the-fly
 ---
 
 # pypvroof demo

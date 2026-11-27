@@ -37,7 +37,7 @@
 - `IGNLidarService` now derives from `RemoteDSMService` (shared HTTP retries,
   grid snapping, GeoTIFF decoding).
 
-- Continuous integration (GitHub Actions): offline tests on Python 3.9 and
+- Continuous integration (GitHub Actions): offline tests on Python 3.10 and
   3.12; network tests on manual runs.
 - `pyarrow` is now a dependency (parquet inputs).
 
