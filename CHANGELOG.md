@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 (unreleased)
+## 0.2.0 (2026-11-27)
 
 ### Added
 - Tilt and azimuth measured on a DSM with a new Theil-Sen-type estimator
@@ -57,7 +57,7 @@
 - `MetadataExtraction.extract_all_characteristics` accepts any input of the
   bulk API; installed capacity coefficients are fitted once.
 
-## 0.1.2 (unreleased)
+## 0.1.2 (not released on PyPI, included in 0.2.0)
 
 - Production fixes: relative imports, LUT nearest-cell fallback for NaN
   cells, lazy GDAL import, CSV shipped in the package, complete dependencies.

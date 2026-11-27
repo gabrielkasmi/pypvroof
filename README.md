@@ -1,6 +1,7 @@
 # PyPVRoof
 
 [![Try it on Hugging Face](https://huggingface.co/datasets/huggingface/badges/resolve/main/open-in-hf-spaces-md.svg)](https://huggingface.co/spaces/gabrielkasmi/pypvroof)
+[![PyPI](https://img.shields.io/pypi/v/pypvroof)](https://pypi.org/project/pypvroof/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7586879.svg)](https://doi.org/10.5281/zenodo.7586879)
 
 PyPVRoof extracts the characteristics of rooftop PV systems from geocoded polygons.
@@ -12,7 +13,7 @@ PyPVRoof extracts the characteristics of rooftop PV systems from geocoded polygo
   DSM, heuristics give an estimate from the polygon alone.
 
 <p align="center">
-<img src="docs/assets/pipeline.png" width=900px alt="pypvroof pipeline: PV polygons, a service fetches the surface model under each polygon, Theil-Sen fits the roof plane(s), output characteristics with a status; without a surface model, heuristics from the polygon">
+<img src="https://raw.githubusercontent.com/gabrielkasmi/pypvroof/master/docs/assets/pipeline.png" width=900px alt="pypvroof pipeline: PV polygons, a service fetches the surface model under each polygon, Theil-Sen fits the roof plane(s), output characteristics with a status; without a surface model, heuristics from the polygon">
 </p>
 
 **Try it** online on [Hugging Face Spaces](https://huggingface.co/spaces/gabrielkasmi/pypvroof):
@@ -116,14 +117,14 @@ from pypvroof.viz import plot_polygon
 fig = plot_polygon(polygon, services=("fr-lidar", "fr-correl"))
 ```
 
-See the [API documentation](docs/api.md) for all parameters and statuses.
+See the [API documentation](https://github.com/gabrielkasmi/pypvroof/blob/master/docs/api.md) for all parameters and statuses.
 
 ## Contributing: add a service
 
 Your country is not in the table? Most national LiDAR surface models are
 published as an OGC WCS (or STAC + Cloud-Optimized GeoTIFFs), and adding one
-is usually a single entry in [`pypvroof/catalog.py`](pypvroof/catalog.py).
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the step-by-step guide, then open a
+is usually a single entry in [`pypvroof/catalog.py`](https://github.com/gabrielkasmi/pypvroof/blob/master/pypvroof/catalog.py).
+See [CONTRIBUTING.md](https://github.com/gabrielkasmi/pypvroof/blob/master/CONTRIBUTING.md) for the step-by-step guide, then open a
 pull request.
 
 ## Citation
@@ -141,5 +142,5 @@ PyPVRoof expands the characteristics extraction module of [Kasmi et al. (2022)](
 
 ## License
 
-MIT, see [LICENSE](LICENSE). The surface models belong to their producers and
+MIT, see [LICENSE](https://github.com/gabrielkasmi/pypvroof/blob/master/LICENSE). The surface models belong to their producers and
 are used under their licences (see the table above).
